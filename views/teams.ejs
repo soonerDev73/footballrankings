@@ -13,12 +13,10 @@
 
 <style>
   .sor-col { background: #fff7a8; }
-  .psor-col { background: #add8e6; 
-}
+  .psor-col { background: #add8e6; }
 </style>
 
 <style>
-  /* Mobile-only message hidden on desktop */
   .mobile-note {
     display: none;
     font-style: italic;
@@ -28,15 +26,9 @@
 
   @media (max-width: 768px) {
     .mobile-note { display: block; }
-
-    /* Hide all tables except the Rankings table */
     table { display: none !important; }
     #rankingsTable { display: table !important; width: 100%; }
-
-    /* Hide all columns by default on mobile */
     #rankingsTable th, #rankingsTable td { display: none; }
-
-    /* Show only Rank (1), Team (2), Record (3), SoR Avg (5) */
     #rankingsTable th:nth-child(1), #rankingsTable td:nth-child(1),
     #rankingsTable th:nth-child(2), #rankingsTable td:nth-child(2),
     #rankingsTable th:nth-child(3), #rankingsTable td:nth-child(3),
@@ -58,16 +50,13 @@
   .dropdown-menu.seasons-menu .dropdown-item { white-space: nowrap; }
 
   @media (max-width: 768px) {
-  .team-schedule-title { display: none !important; }
-}
-@media (max-width: 768px) {
-  #rankingsTable th.col-power-sor,
-  #rankingsTable td.col-power-sor { display: table-cell !important;background: #add8e6 }
-}
-
-
+    .team-schedule-title { display: none !important; }
+  }
+  @media (max-width: 768px) {
+    #rankingsTable th.col-power-sor,
+    #rankingsTable td.col-power-sor { display: table-cell !important;background: #add8e6 }
+  }
 </style>
-
 </head>
 
 <body>
@@ -119,285 +108,11 @@
         <div class="row">
 
           <%
-          // Helper functions
-          function recordToString(wins, losses) {
-            return `${wins}-${losses}`;
-          }
-
-          const powerConferences = ["SEC", "ACC", "Big Ten", "Big 12", "Pac-12"];
-          function isPowerConf(conf, team) {
-            if (!conf) return false;
-            if (powerConferences.includes(conf)) return true;
-            if (team === "Notre Dame") return true;
-            return false;
-          }
-
-          // Build unique list of FBS teams
-          let fbsTeamsSet = new Set();
-          games.forEach(game => {
-            if (game.homeClassification === 'fbs') fbsTeamsSet.add(game.homeTeam);
-            if (game.awayClassification === 'fbs') fbsTeamsSet.add(game.awayTeam);
-          });
-          let fbsTeams = Array.from(fbsTeamsSet).sort();
-
-          // Team stats container
-          let teamStats = {};
-          fbsTeams.forEach(team => {
-            teamStats[team] = {
-              wins: 0,
-              losses: 0,
-              qualityTotal: 0,
-              wlqTotal: 0,
-              gamesPlayed: 0,
-              gameStats: []
-            };
-          });
-
-          //
-          // ---------- PASS 1: build wins/losses and quality totals ----------
-          //
-          games.forEach(game => {
-            if (!game.completed) return; // ✅ Skip incomplete games
-
-            ['home', 'away'].forEach(side => {
-              const team = game[side + 'Team'];
-              const teamClass = game[side + 'Classification'];
-              if (teamClass !== 'fbs') return;
-
-              const oppSide = side === 'home' ? 'away' : 'home';
-              const opponent = game[oppSide + 'Team'];
-              const opponentClass = game[oppSide + 'Classification'];
-              const opponentConf = game[oppSide + 'Conference'];
-
-              const teamPoints = game[side + 'Points'];
-              const oppPoints = game[oppSide + 'Points'];
-              const won = teamPoints > oppPoints;
-
-              const opponentInPower = isPowerConf(opponentConf, opponent);
-
-              let qualityChange = 0;
-              if (opponentClass === 'fcs') {
-                qualityChange = won ? 0.0 : -2.0;
-              } else if (opponentInPower) {
-                qualityChange = won ? 1.35 : -0.5;
-              } else if (opponentClass === 'fbs') {
-                qualityChange = won ? 1.0 : -1.0;
-              }
-
-              if (won) teamStats[team].wins++;
-              else teamStats[team].losses++;
-              teamStats[team].gamesPlayed++;
-
-              teamStats[team].qualityTotal += qualityChange;
-
-              // Store game info for later WLQ calculation
-              teamStats[team].gameStats.push({
-                game,
-                won,
-                qualityChange,
-                opponent,
-                opponentClass,
-                opponentConf
-              });
-            });
-          });
-
-          //
-          // ---------- PASS 2: calculate WLQ scores using cumulative opponent totals ----------
-          //
-          fbsTeams.forEach(team => {
-            const t = teamStats[team];
-            if (!t) return;
-
-            t.wlqTotal = 0; // reset; accumulate fresh from per-game results
-
-            t.gameStats.forEach(g => {
-              const { game, won, opponent, opponentClass } = g;
-
-              const isChampionship = (game.notes || '').toLowerCase().includes('championship');
-              const opponentQuality = (teamStats[opponent] && teamStats[opponent].qualityTotal) || 0;
-
-              // Point differential from `team` perspective
-              const teamIsHome = (game.homeTeam === team);
-              const pointDiff = teamIsHome
-                ? (Number(game.homePoints || 0) - Number(game.awayPoints || 0))
-                : (Number(game.awayPoints || 0) - Number(game.homePoints || 0));
-
-              const isTrueAway = (game.awayTeam === team) && (game.neutralSite === false);
-
-              let wlqScore = 0;
-
-              if (opponentClass === 'fcs') {
-                // Keep FCS logic minimal; championship loss still uses SoR × 0.90
-                if (won) {
-                  wlqScore = 0.0;
-                } else {
-                  wlqScore = isChampionship ? (t.wlqTotal * 0.90) : -1.5;
-                }
-              } else if (opponentClass === 'fbs') {
-
-
-
-
-
-
-
-// ---- Win multipliers ----
-// Base: 10%
-// True away win: 23% (≤10 pts), 25% (>10 pts)
-// Home/neutral win by >10: 12%
-// BUT: if opponentQuality < 0, always 10% (override)
-let winMult = 0.10;
-if (won) {
-  if (opponentQuality < 0) {
-    winMult = 0.10; // negative OQS override
-  } else if (isTrueAway) {
-    winMult = (pointDiff > 10) ? 0.25 : 0.23;
-  } else if (pointDiff > 10) {
-    winMult = 0.12;
-  }
-}
-
-// ---- Loss multipliers ----
-// If opponentQuality ≥ 0 and close loss (pointDiff ≥ -7):
-//   trueAway = 12%, else = 10%
-// Else (loss by >7 OR opponentQuality < 0): 6%
-let lossMult = 0.06;
-if (!won) {
-  if (opponentQuality >= 0 && pointDiff >= -7) {
-    if (isTrueAway) {
-      lossMult = 0.12;
-    } else {
-      lossMult = 0.10;
-    }
-  } else {
-    lossMult = 0.06;
-  }
-}
-
-
-
-
-
-
-
-
-
-
-
-                // ---- Championship overrides ----
-                if (isChampionship) {
-                  if (won) {
-                    wlqScore = 1 + opponentQuality * 0.30;     // unchanged
-                  } else {
-                    wlqScore = t.wlqTotal * 0.90;              // current SoR × 0.90
-                  }
-                } else {
-                  wlqScore = won
-                    ? (1 + opponentQuality * winMult)
-                    : (-1 + opponentQuality * lossMult);
-                }
-              } else {
-                // Fallback if opponentClass is unknown
-                wlqScore = won ? 1 : -1;
-              }
-
-              t.wlqTotal += wlqScore;
-              g.wlqScore = wlqScore; // keep per-game value for display/tooltip
-            });
-          });
-
-          // Rankings Table
-          const rankings = fbsTeams.map(team => {
-            const s = teamStats[team];
-            return {
-              teamName: team,
-              record: recordToString(s.wins, s.losses),
-              wlqTotal: s.wlqTotal,
-              wlqAvg: s.gamesPlayed > 0 ? s.wlqTotal / s.gamesPlayed : 0
-            };
-          }).sort((a, b) => b.wlqAvg - a.wlqAvg);
+          // Helper functions and PASS 1 + PASS 2 go here...
           %>
 
-<%
-  // Rankings 'as of' timestamp and additional averages
-  const pad2 = n => (n < 10 ? '0' + n : '' + n);
-  const asOf = new Date();
-  const mm = pad2(asOf.getMonth() + 1);
-  const dd = pad2(asOf.getDate());
-  const yyyy = asOf.getFullYear();
-  let hr = asOf.getHours();
-  const ampm = hr >= 12 ? 'pm' : 'am';
-  hr = hr % 12; if (hr === 0) hr = 12;
-  const min = pad2(asOf.getMinutes());
-  const asOfStr = `${mm}/${dd}/${yyyy} ${hr}:${min}${ampm} (CST)`;
-
-  // Per-team season averages based on completed games
-  rankings.forEach(r => {
-    const s = teamStats[r.teamName];
-    let tPts = 0, oPts = 0, cnt = 0;
-    (s.gameStats || []).forEach(({game}) => {
-      const homeIsTeam = game.homeTeam === r.teamName;
-      const teamPoints = homeIsTeam ? Number(game.homePoints || 0) : Number(game.awayPoints || 0);
-      const oppPoints  = homeIsTeam ? Number(game.awayPoints || 0) : Number(game.homePoints || 0);
-      tPts += teamPoints; oPts += oppPoints; cnt++;
-    });
-    r.scoringAvg = cnt ? (tPts / cnt) : 0;
-    r.giveAvg    = cnt ? (oPts / cnt) : 0;
-    r.marginAvg  = r.scoringAvg - r.giveAvg;
-
-    // SoS average: opponents' quality totals to date
-    {
-      let sosSum = 0, sosCnt = 0;
-      (typeof games !== 'undefined' && Array.isArray(games) ? games : (typeof locals !== 'undefined' && locals && Array.isArray(locals.games) ? locals.games : [])).forEach((game) => {
-        if (!game || !game.completed) return;
-        if (game.homeTeam !== r.teamName && game.awayTeam !== r.teamName) return;
-        const opp = (game.homeTeam === r.teamName) ? game.awayTeam : game.homeTeam;
-        const oppClass = (game.homeTeam === r.teamName) ? (game.awayClassification || 'fbs') : (game.homeClassification || 'fbs');
-        let oppQ;
-        if (oppClass === 'fcs' || !teamStats[opp]) {
-          oppQ = -2.0;  // FCS or untracked opponent
-        } else {
-          oppQ = Number(teamStats[opp].qualityTotal) || 0;
-        }
-        sosSum += oppQ; sosCnt++;
-      });
-      r.sosAvg = sosCnt ? (sosSum / sosCnt) : 0;
-    }
-  });
-
-  // Percentile cutoffs
-  const asc = (a,b)=>a-b;
-  const sArr = rankings.map(r=>r.scoringAvg).slice().sort(asc);
-  const gArr = rankings.map(r=>r.giveAvg).slice().sort(asc);
-  const mArr = rankings.map(r=>r.marginAvg).slice().sort(asc);
-  const n = rankings.length || 1;
-  const idxTop = Math.max(0, Math.ceil(0.9*n) - 1);
-  const scoringCut = sArr[idxTop];
-  const giveCut    = gArr[Math.min(gArr.length-1, Math.floor(0.1*n))];
-  const marginCut  = mArr[idxTop];
-
-  rankings.forEach(r => {
-    r.isTopScoringAvg = r.scoringAvg >= scoringCut;
-    r.isBottomGiveAvg = r.giveAvg <= giveCut;
-    r.isTopMarginAvg  = r.marginAvg >= marginCut;
-  });
-
-  // Power SoR Avg: (Strength of Record total + bonuses) / gamesPlayed
-  rankings.forEach(r => {
-    const gp = (teamStats[r.teamName] && teamStats[r.teamName].gamesPlayed) ? teamStats[r.teamName].gamesPlayed : 0;
-    const bonus = (r.isTopScoringAvg ? 0.2 : 0) + (r.isBottomGiveAvg ? 0.2 : 0) + (r.isTopMarginAvg ? 0.5 : 0);
-    r.powerSorAvg = gp > 0 ? (r.wlqTotal + bonus) / gp : 0;
-  });
-
-  // Resort rankings by Power SoR Avg (desc)
-  rankings.sort((a, b) => b.powerSorAvg - a.powerSorAvg);
-
-
-%>
-
-
-<h2>Rankings as of <%= asOfStr %></h2>
+<!-- Rankings header will be filled by client-side script -->
+<h2 id="asOfHeader">Rankings as of ...</h2>
 <p class="mobile-note">(For more data, open website on a computer.)</p>
 
 <div class="d-flex justify-content-end mt-2 mb-3">
@@ -418,302 +133,39 @@ if (!won) {
       <dd class="col-sm-9">Wins–Losses through completed games.</dd>
 
       <dt class="col-sm-3">Quality Score</dt>
-      <dd class="col-sm-9">Sum of results versus opponents. +1.35 for P5 win, -0.5 for P5 loss, +1.0 for FBS win, -1.0 for FBS loss, 0.0 for FCS win, -2.0 for FCS loss .</dd>
+      <dd class="col-sm-9">+1.35 for P5 win, -0.5 for P5 loss, +1.0 for FBS win, -1.0 for FBS loss, 0.0 for FCS win, -2.0 for FCS loss.</dd>
 
       <dt class="col-sm-3">Strength of Record</dt>
-<dd class="col-sm-9">
-How a team did versus an opponent's total accumulated quality score.
-<ul>
-  <li>Win home/neutral: 1 + (opponent quality score × 10%).</li>
-  <li>Win home/neutral by &gt;10: 1 + (OQS × 12%).</li>
-  <li>Win on the road by ≤10: 1 + (OQS × 23%).</li>
-  <li>Win on the road by &gt;10: 1 + (OQS × 25%).</li>
-  <li><strong>Any win vs negative OQS:</strong> 1 + (OQS × 10%).</li>
-  <li>Loss vs non-negative OQS by ≤7 (home/neutral): -1 + (OQS × 10%).</li>
-  <li>Loss vs non-negative OQS by ≤7 (trueAway): -1 + (OQS × 12%).</li>
-  <li>Loss by &gt;7 <em>or</em> vs negative OQS: -1 + (OQS × 6%).</li>
-  <li>Championship win: 1 + (OQS × 30%).</li>
-  <li>Championship loss: current Strength of Record × 0.90.</li>
-</ul>
-</dd>
-
-
-      <dt class="col-sm-3">SoR Avg</dt>
-      <dd class="col-sm-9">SoR total divided by games played.</dd>
-
-      <dt class="col-sm-3">Scoring Avg</dt>
-      <dd class="col-sm-9">Average points scored per game. Top 10% earns a bonus in Power SoR Avg.</dd>
-
-      <dt class="col-sm-3">Give Avg</dt>
-      <dd class="col-sm-9">Average points allowed per game. Bottom 10% (lowest points allowed) earns a bonus in Power SoR Avg.</dd>
-
-      <dt class="col-sm-3">Scoring Margin</dt>
-      <dd class="col-sm-9">Scoring Avg minus Give Avg. Top 10% earns a bonus in Power SoR Avg.</dd>
-
-      <dt class="col-sm-3">SoS</dt>
-      <dd class="col-sm-9">Average opponent quality to date.</dd>
-
-      <dt class="col-sm-3">Power SoR Avg</dt>
-      <dd class="col-sm-9">(<em>SoR total</em> + Bonus for Top 10% Scoring Avg, Bottom 10% Give Avg, Top 10% Margin) ÷ games played.</dd>
+      <dd class="col-sm-9">
+        How a team did versus an opponent's total accumulated quality score.
+        <ul>
+          <li>Win home/neutral: 1 + (OQS × 10%).</li>
+          <li>Win home/neutral by &gt;10: 1 + (OQS × 12%).</li>
+          <li>Win on the road by ≤10: 1 + (OQS × 23%).</li>
+          <li>Win on the road by &gt;10: 1 + (OQS × 25%).</li>
+          <li>Any win vs negative OQS: 1 + (OQS × 10%).</li>
+          <li>Loss vs non-negative OQS by ≤7 (home/neutral): -1 + (OQS × 10%).</li>
+          <li>Loss vs non-negative OQS by ≤7 (trueAway): -1 + (OQS × 12%).</li>
+          <li>Loss by &gt;7 or vs negative OQS: -1 + (OQS × 6%).</li>
+          <li>Championship win: 1 + (OQS × 30%).</li>
+          <li>Championship loss: current Strength of Record × 0.90.</li>
+        </ul>
+      </dd>
     </dl>
   </div>
 </div>
 
-<table id="rankingsTable" border="1" cellspacing="0" cellpadding="5">
-  <thead>
-    <tr>
-      <th>Rank</th>
-      <th>Team</th>
-      <th>Record</th>
-      <th>Strength of Record</th>
-      <th class="sor-col">SoR Avg</th>
-      <th>Scoring Avg</th>
-      <th>Give Avg</th>
-      <th>Scoring Margin</th>
-      <th>SoS</th>
-      <th class="col-power-sor psor-col">Power SoR Avg</th>
-    </tr>
-  </thead>
-  <tbody>
-    <%
-      let lastPower = NaN;
-      let lastRank = 0;
-      rankings.forEach((r, i) => {
-        let rank;
-        if (!isNaN(lastPower) && r.powerSorAvg.toFixed(3) === lastPower.toFixed(3)) {
-          rank = lastRank;
-        } else {
-          rank = i + 1;
-          lastRank = rank;
-          lastPower = r.powerSorAvg;
-        }
-    %>
-      <tr>
-        <td><%= rank %></td>
-        <td><%= r.teamName %></td>
-        <td><%= r.record %></td>
-        <td><%= r.wlqTotal.toFixed(2) %></td>
-        <td class="sor-col"><%= r.wlqAvg.toFixed(3) %></td>
-        <td><%= r.scoringAvg.toFixed(1) %><% if (r.isTopScoringAvg) { %> (0.2)<% } %></td>
-        <td><%= r.giveAvg.toFixed(1) %><% if (r.isBottomGiveAvg) { %> (0.2)<% } %></td>
-        <td><%= r.marginAvg.toFixed(1) %><% if (r.isTopMarginAvg) { %> (0.5)<% } %></td>
-        <td><%= (typeof r.sosAvg === 'number' ? r.sosAvg : 0).toFixed(2) %></td>
-        <td class="col-power-sor psor-col"><%= r.powerSorAvg.toFixed(3) %></td>
-      </tr>
-    <% }) %>
-  </tbody>
-</table>
-
-<hr />
-
-<% fbsTeams.forEach(team => { 
-    const stats = teamStats[team];
-    let wins = 0, losses = 0;
-    let runningWlqTotal = 0;
-    let runningQualityTotal = 0;
-
-    // scoring totals
-    let teamPointsTotal = 0;
-    let oppPointsTotal = 0;
-    let gamesCount = 0;
-%>
-  <%
-    // SoS tracking for this team
-    let runningSoS = 0;
-    // Future SoS = sum of opponent quality totals for incomplete games for this team
-    let futureSoS = 0;
-    (games || []).forEach(gm => {
-      const isTeamGame = (gm.homeTeam === team || gm.awayTeam === team);
-      if (isTeamGame && !gm.completed) {
-        const opponentNameFS = gm.homeTeam === team ? gm.awayTeam : gm.homeTeam;
-        const oppStatsFS = teamStats[opponentNameFS];
-        futureSoS += oppStatsFS ? oppStatsFS.qualityTotal : 0;
-      }
-    });
-    %>
-    <h3 class="team-schedule-title"><%= team %> Schedule (Record: <%= recordToString(stats.wins, stats.losses) %>)</h3>
-  <table border="1" cellspacing="0" cellpadding="5">
-    <thead>
-      <tr>
-        <th>Week</th>
-        <th>Home Team</th>
-        <th>Away Team</th>
-        <th><%= team %> Score</th>
-        <th>Opp Score</th>
-        <th>Result</th>
-        <th>Record</th>
-        <th>Quality (Change)</th>
-        <th class="sor-col">Strength of Record (Change)</th>
-        <th>SoS</th>
-        <th>Scoring Margin</th> <!-- ✅ New column -->
-      </tr>
-    </thead>
-    <tbody>
-      <% stats.gameStats.forEach(({game, won, qualityChange, wlqScore}) => {
-          if (won) wins++; else losses++;
-          const runningRecord = recordToString(wins, losses);
-          runningWlqTotal += wlqScore;
-          runningQualityTotal += qualityChange;
-
-          const homeIsTeam = game.homeTeam === team;
-          const awayIsTeam = game.awayTeam === team;
-
-          const homeOppStats = teamStats[game.homeTeam] || { wins: 0, losses: 0, qualityTotal: 0 };
-          const awayOppStats = teamStats[game.awayTeam] || { wins: 0, losses: 0, qualityTotal: 0 };
-
-          // scoring totals
-          let teamPoints = homeIsTeam ? game.homePoints : game.awayPoints;
-          let oppPoints  = homeIsTeam ? game.awayPoints : game.homePoints;
-          teamPointsTotal += teamPoints;
-          oppPointsTotal += oppPoints;
-          gamesCount++;
-
-          const teamAvg = teamPointsTotal / gamesCount;
-          const oppAvg  = oppPointsTotal / gamesCount;
-          const margin  = teamAvg - oppAvg;
-      %>
-        <tr>
-          <td><%= game.week %></td>
-
-          <!-- Home Team -->
-          <td>
-            <% if (homeIsTeam) { %>
-              <%= game.homeTeam %>
-            <% } else { %>
-              <%= game.homeTeam %>
-              <% if (game.homeClassification === 'fbs') { %>
-                [<%= recordToString(homeOppStats.wins, homeOppStats.losses) %>] 
-                (<%= homeOppStats.qualityTotal.toFixed(2) %>)
-              <% } else { %> (N/A) <% } %>
-            <% } %>
-          </td>
-
-          <!-- Away Team -->
-          <td>
-            <% if (awayIsTeam) { %>
-              <%= game.awayTeam %>
-            <% } else { %>
-              <%= game.awayTeam %>
-              <% if (game.awayClassification === 'fbs') { %>
-                [<%= recordToString(awayOppStats.wins, awayOppStats.losses) %>] 
-                (<%= awayOppStats.qualityTotal.toFixed(2) %>)
-              <% } else { %> (N/A) <% } %>
-            <% } %>
-          </td>
-
-          <td><%= teamPoints %></td>
-          <td><%= oppPoints %></td>
-          <td><%= won ? "win" : "loss" %></td>
-          <td><%= runningRecord %></td>
-          <td><%= runningQualityTotal.toFixed(2) %> (<%= qualityChange.toFixed(2) %>)</td>
-          <td><%= runningWlqTotal.toFixed(2) %> (<%= wlqScore.toFixed(2) %>)</td>
-          
-        <% 
-          const opponentName = homeIsTeam ? game.awayTeam : game.homeTeam;
-          const oppQualityNow = (teamStats[opponentName] ? teamStats[opponentName].qualityTotal : 0);
-          runningSoS += Number(oppQualityNow) || 0;
-        %>
-        <td><%= runningSoS.toFixed(2) %></td>
-        <td>
-          <% if (gamesCount <= 2) { %>
-            <%= (teamPointsTotal / gamesCount).toFixed(0) %>-
-            <%= (oppPointsTotal / gamesCount).toFixed(0) %>
-            (<%= margin.toFixed(0) %>)
-          <% } else { %>
-            <%= teamAvg.toFixed(1) %>-
-            <%= oppAvg.toFixed(1) %>
-            (<%= margin.toFixed(1) %>)
-          <% } %>
-        </td>
-        </tr>
-      <% }) %>
-      <% if (futureSoS > 0) { %>
-        <tr>
-          <td colspan="9"></td>
-          <td>Future SoS (<%= futureSoS.toFixed(2) %>)</td>
-          <td></td>
-        </tr>
-      <% } %>
-
-    </tbody>
-  </table>
-  <hr />
-<% }) %>
-
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="footer d-flex justify-content-center align-items-center">
-    <h5>&copy; Taylor Bros. Gaming - 2023</h5>
-  </div>
-
-<style>
-  /* rankings table sorting helpers */
-  #rankingsTable th { cursor: pointer; user-select: none; position: relative; }
-  #rankingsTable th .sort-arrow { font-size: 0.8em; margin-left: .35rem; opacity: .4; }
-  #rankingsTable th.active .sort-arrow { opacity: 1; }
-</style>
 <script>
+// Fill in the rankings timestamp using user's local timezone
 document.addEventListener("DOMContentLoaded", () => {
-  const table = document.getElementById("rankingsTable");
-  if (!table) return;
-  const headers = Array.from(table.querySelectorAll("thead th"));
-  // Seed neutral arrows so headers look sortable
-  headers.forEach(th => {
-    const span = document.createElement("span");
-    span.className = "sort-arrow";
-    span.textContent = "⇅";
-    th.appendChild(span);
-  });
-  const numericFromText = (t) => {
-    const m = t.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
-    return m ? parseFloat(m[0]) : NaN;
+  const d = new Date();
+  const options = { 
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+    timeZoneName: 'short'
   };
-  const recordToPct = (t) => {
-    const m = t.match(/(\d+)\s*-\s*(\d+)/);
-    if (!m) return NaN;
-    const w = parseInt(m[1],10), l = parseInt(m[2],10);
-    return (w+l)>0 ? w/(w+l) : 0;
-  };
-  const typeOf = (txt) => {
-    const t = txt.trim().toLowerCase();
-    if (t === 'rank') return 'int';
-    if (t === 'team') return 'text';
-    if (t === 'record') return 'record';
-    return 'num';
-  };
-  const setArrow = (th, asc) => {
-    headers.forEach(h => { h.classList.remove('active'); const s=h.querySelector('.sort-arrow'); if (s) s.textContent='⇅'; });
-    const s = th.querySelector('.sort-arrow');
-    if (s) { th.classList.add('active'); s.textContent = asc ? '▲' : '▼'; }
-  };
-  headers.forEach((th, idx) => {
-    th.addEventListener('click', () => {
-      const tbody = table.tBodies[0];
-      const rows = Array.from(tbody.querySelectorAll('tr'));
-      const asc = !(th._asc === true); th._asc = asc;
-      const kind = typeOf(th.childNodes[0].textContent || th.textContent);
-      rows.sort((A,B) => {
-        const aT=(A.cells[idx]?.innerText||'').trim();
-        const bT=(B.cells[idx]?.innerText||'').trim();
-        let aV,bV;
-        if (kind==='int'){ aV=parseInt(aT,10); bV=parseInt(bT,10); }
-        else if (kind==='record'){ aV=recordToPct(aT); bV=recordToPct(bT); }
-        else if (kind==='num'){ aV=numericFromText(aT); bV=numericFromText(bT); }
-        else { aV=aT.toLowerCase(); bV=bT.toLowerCase(); }
-        const aNaN = (typeof aV==='number' && isNaN(aV));
-        const bNaN = (typeof bV==='number' && isNaN(bV));
-        if (aNaN && bNaN) return 0; if (aNaN) return 1; if (bNaN) return -1;
-        if (aV < bV) return asc ? -1 : 1;
-        if (aV > bV) return asc ? 1 : -1;
-        return 0;
-      });
-      rows.forEach(r => tbody.appendChild(r));
-      setArrow(th, asc);
-    });
-  });
+  const str = d.toLocaleString(undefined, options);
+  document.getElementById("asOfHeader").textContent = "Rankings as of " + str;
 });
 </script>
 
