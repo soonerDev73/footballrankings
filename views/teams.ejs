@@ -17,7 +17,6 @@
 }
 </style>
 
-
 <style>
   /* Mobile-only message hidden on desktop */
   .mobile-note {
@@ -46,7 +45,6 @@
     }
   }
 </style>
-
 
 <style>
   .dropdown-menu.seasons-menu,
@@ -208,31 +206,104 @@
           // ---------- PASS 2: calculate WLQ scores using cumulative opponent totals ----------
           //
           fbsTeams.forEach(team => {
-            teamStats[team].wlqTotal = 0; // reset, we’ll accumulate fresh
-            teamStats[team].gameStats.forEach(g => {
-              const { game, won, qualityChange, opponent, opponentClass, opponentConf } = g;
-              const isChampionship = game.notes && game.notes.toLowerCase().includes('championship');
-              const opponentQuality = teamStats[opponent] ? teamStats[opponent].qualityTotal : 0;
+            const t = teamStats[team];
+            if (!t) return;
 
-              
+            t.wlqTotal = 0; // reset; accumulate fresh from per-game results
+
+            t.gameStats.forEach(g => {
+              const { game, won, opponent, opponentClass } = g;
+
+              const isChampionship = (game.notes || '').toLowerCase().includes('championship');
+              const opponentQuality = (teamStats[opponent] && teamStats[opponent].qualityTotal) || 0;
+
+              // Point differential from `team` perspective
+              const teamIsHome = (game.homeTeam === team);
+              const pointDiff = teamIsHome
+                ? (Number(game.homePoints || 0) - Number(game.awayPoints || 0))
+                : (Number(game.awayPoints || 0) - Number(game.homePoints || 0));
+
+              const isTrueAway = (game.awayTeam === team) && (game.neutralSite === false);
+
               let wlqScore = 0;
-              if (opponentClass === 'fcs') {
-                wlqScore = won ? 0.0 : (isChampionship ? 1 : -1.5);
-              } else if (opponentClass === 'fbs') {
-                const isTrueAway = (game.awayTeam === team) && (game.neutralSite === false);
-                const winMult = (isTrueAway && opponentQuality >= 0) ? 0.23 : 0.10;
 
-                if (isChampionship) {
-    wlqScore = won ? (1 + opponentQuality * .3) : (0.8);
-  } else {
-    wlqScore = won ? (1 + opponentQuality * winMult)
-                   : (-1 + opponentQuality * 0.06);
+              if (opponentClass === 'fcs') {
+                // Keep FCS logic minimal; championship loss still uses SoR × 0.90
+                if (won) {
+                  wlqScore = 0.0;
+                } else {
+                  wlqScore = isChampionship ? (t.wlqTotal * 0.90) : -1.5;
+                }
+              } else if (opponentClass === 'fbs') {
+
+
+
+
+
+
+
+// ---- Win multipliers ----
+// Base: 10%
+// True away win: 23% (≤10 pts), 25% (>10 pts)
+// Home/neutral win by >10: 12%
+// BUT: if opponentQuality < 0, always 10% (override)
+let winMult = 0.10;
+if (won) {
+  if (opponentQuality < 0) {
+    winMult = 0.10; // negative OQS override
+  } else if (isTrueAway) {
+    winMult = (pointDiff > 10) ? 0.25 : 0.23;
+  } else if (pointDiff > 10) {
+    winMult = 0.12;
   }
+}
+
+// ---- Loss multipliers ----
+// If opponentQuality ≥ 0 and close loss (pointDiff ≥ -7):
+//   trueAway = 12%, else = 10%
+// Else (loss by >7 OR opponentQuality < 0): 6%
+let lossMult = 0.06;
+if (!won) {
+  if (opponentQuality >= 0 && pointDiff >= -7) {
+    if (isTrueAway) {
+      lossMult = 0.12;
+    } else {
+      lossMult = 0.10;
+    }
+  } else {
+    lossMult = 0.06;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+                // ---- Championship overrides ----
+                if (isChampionship) {
+                  if (won) {
+                    wlqScore = 1 + opponentQuality * 0.30;     // unchanged
+                  } else {
+                    wlqScore = t.wlqTotal * 0.90;              // current SoR × 0.90
+                  }
+                } else {
+                  wlqScore = won
+                    ? (1 + opponentQuality * winMult)
+                    : (-1 + opponentQuality * lossMult);
+                }
+              } else {
+                // Fallback if opponentClass is unknown
+                wlqScore = won ? 1 : -1;
               }
 
-              teamStats[team].wlqTotal += wlqScore;
-
-              g.wlqScore = wlqScore; // store for display
+              t.wlqTotal += wlqScore;
+              g.wlqScore = wlqScore; // keep per-game value for display/tooltip
             });
           });
 
@@ -349,9 +420,23 @@
       <dt class="col-sm-3">Quality Score</dt>
       <dd class="col-sm-9">Sum of results versus opponents. +1.35 for P5 win, -0.5 for P5 loss, +1.0 for FBS win, -1.0 for FBS loss, 0.0 for FCS win, -2.0 for FCS loss .</dd>
 
-
       <dt class="col-sm-3">Strength of Record</dt>
-      <dd class="col-sm-9">How a team did versus an opponent's total accumulated quality score. Win home/neutral: 1 + (opponent quality score * 10%). Win on road: 1 + (OQS * 23%). Loss: -1 + (OQS * 8%).</dd>
+<dd class="col-sm-9">
+How a team did versus an opponent's total accumulated quality score.
+<ul>
+  <li>Win home/neutral: 1 + (opponent quality score × 10%).</li>
+  <li>Win home/neutral by &gt;10: 1 + (OQS × 12%).</li>
+  <li>Win on the road by ≤10: 1 + (OQS × 23%).</li>
+  <li>Win on the road by &gt;10: 1 + (OQS × 25%).</li>
+  <li><strong>Any win vs negative OQS:</strong> 1 + (OQS × 10%).</li>
+  <li>Loss vs non-negative OQS by ≤7 (home/neutral): -1 + (OQS × 10%).</li>
+  <li>Loss vs non-negative OQS by ≤7 (trueAway): -1 + (OQS × 12%).</li>
+  <li>Loss by &gt;7 <em>or</em> vs negative OQS: -1 + (OQS × 6%).</li>
+  <li>Championship win: 1 + (OQS × 30%).</li>
+  <li>Championship loss: current Strength of Record × 0.90.</li>
+</ul>
+</dd>
+
 
       <dt class="col-sm-3">SoR Avg</dt>
       <dd class="col-sm-9">SoR total divided by games played.</dd>
