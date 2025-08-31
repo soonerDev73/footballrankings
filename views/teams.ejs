@@ -64,6 +64,11 @@
       #rankingsTable td.col-power-sor { display: table-cell !important;background: #add8e6 }
     }
   </style>
+  <style>
+    #aboutCollapse, #glossaryCollapse {
+      margin-top: 4rem; /* adjust as needed */
+    }
+  </style>
 </head>
 
 <body>
@@ -101,6 +106,18 @@
                   </li>
                 <% } %>
               </ul>
+              <!-- Mobile-only extra items (About & Glossary) -->
+<ul class="navbar-nav d-lg-none mt-2">
+  <li class="nav-item">
+    <a class="nav-link js-open-info" href="#" data-info="about">About</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link js-open-info" href="#" data-info="glossary">Glossary</a>
+  </li>
+</ul>
+
+
+
             </li>
           </ul>
         </div>
@@ -138,6 +155,9 @@
 
           // Team stats container
           let teamStats = {};
+          let conferenceRecords = {};
+          let teamConference = {};   
+
           fbsTeams.forEach(team => {
             teamStats[team] = {
               wins: 0,
@@ -169,6 +189,12 @@
               const oppPoints = game[oppSide + 'Points'];
               const won = teamPoints > oppPoints;
 
+               // ✅ Capture team’s conference name if available
+      const teamConf = game[side + 'Conference'];
+      if (teamConf && !teamConference[team]) {
+        teamConference[team] = teamConf;
+      }
+
               const opponentInPower = isPowerConf(opponentConf, opponent);
 
               let qualityChange = 0;
@@ -185,6 +211,18 @@
               teamStats[team].gamesPlayed++;
 
               teamStats[team].qualityTotal += qualityChange;
+
+              if (game.conferenceGame) {
+  if (!conferenceRecords[team]) {
+    conferenceRecords[team] = { confWins: 0, confLosses: 0 };
+  }
+  if (won) {
+    conferenceRecords[team].confWins++;
+  } else {
+    conferenceRecords[team].confLosses++;
+  }
+}
+
 
               // Store game info for later WLQ calculation
               teamStats[team].gameStats.push({
@@ -227,7 +265,7 @@
                 if (won) {
                   wlqScore = 0.0;
                 } else {
-                  wlqScore = isChampionship ? (t.wlqTotal * 0.90) : -1.5;
+                  wlqScore = isChampionship ? (t.wlqTotal * 0.90) : -2.0;
                 }
               } else if (opponentClass === 'fbs') {
                 // ---- Win multipliers ----
@@ -264,7 +302,7 @@
                   if (won) {
                     wlqScore = 1 + opponentQuality * 0.30;     // championship win
                   } else {
-                    wlqScore = 1.1;              // championship loss = current SoR × 0.90
+                    wlqScore = 1.0;              
                   }
                 } else {
                   wlqScore = won
@@ -348,12 +386,16 @@
     r.isTopMarginAvg  = r.marginAvg >= marginCut;
   });
 
-  // Power SoR Avg: (Strength of Record total + bonuses) / gamesPlayed
-  rankings.forEach(r => {
-    const gp = (teamStats[r.teamName] && teamStats[r.teamName].gamesPlayed) ? teamStats[r.teamName].gamesPlayed : 0;
-    const bonus = (r.isTopScoringAvg ? 0.2 : 0) + (r.isBottomGiveAvg ? 0.2 : 0) + (r.isTopMarginAvg ? 0.5 : 0);
-    r.powerSorAvg = gp > 0 ? (r.wlqTotal + bonus) / gp : 0;
-  });
+ // Power SoR Avg: (Strength of Record total + bonuses) / gamesPlayed
+rankings.forEach(r => {
+  const gp = (teamStats[r.teamName] && teamStats[r.teamName].gamesPlayed) ? teamStats[r.teamName].gamesPlayed : 0;
+  const giveBonusEligible = (gp > 0) && r.isBottomGiveAvg;   // ← only if they've played
+  const bonus = (r.isTopScoringAvg ? 0.2 : 0)
+             + (giveBonusEligible ? 0.2 : 0)
+             + (r.isTopMarginAvg ? 0.5 : 0);
+  r.powerSorAvg = gp > 0 ? (r.wlqTotal + bonus) / gp : 0;
+});
+
 
   // Resort rankings by Power SoR Avg (desc)
   rankings.sort((a, b) => b.powerSorAvg - a.powerSorAvg);
@@ -362,10 +404,69 @@
 <h2 id="asOfHeader">Rankings as of ...</h2>
 <p class="mobile-note">(For more data, open website on a computer.)</p>
 
-<div class="d-flex justify-content-end mt-2 mb-3">
-  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#glossaryCollapse" aria-expanded="false" aria-controls="glossaryCollapse">
-    Glossary
-  </button>
+<!-- Buttons row (equal width) -->
+<div class="row mt-2 mb-3 d-none d-lg-flex">
+  <div class="col-3 pe-lg-1">
+    <button class="btn btn-sm btn-outline-secondary w-100" type="button"
+            data-bs-toggle="collapse" data-bs-target="#aboutCollapse"
+            aria-expanded="false" aria-controls="aboutCollapse">
+      About Rankings
+    </button>
+  </div>
+  <div class="col-3 text-end ps-lg-1">
+    <button class="btn btn-sm btn-outline-secondary w-100" type="button"
+            data-bs-toggle="collapse" data-bs-target="#glossaryCollapse"
+            aria-expanded="false" aria-controls="glossaryCollapse">
+      Glossary
+    </button>
+  </div>
+</div>
+
+<!-- About Rankings collapsible -->
+<div class="collapse" id="aboutCollapse">
+  <div class="card card-body text-start">
+    <h5>About This Ranking System</h5>
+    <p>
+      Unlike the <strong>AP Poll</strong> or <strong>Coaches Poll</strong>, which are based on the subjective opinions of sportswriters or coaches,
+      this ranking system is <em>data-driven</em> and recalculates team strength after every game using objective metrics.
+    </p>
+    <p>
+      It doesn’t rely on reputation, preseason expectations, or “eye tests.” Instead, it builds a team’s standing from the ground up by tracking:
+    </p>
+    <ul>
+      <li><strong>Quality of Wins and Losses (Quality Score):</strong>
+        Beating a strong team counts more than beating a weak one; losing to a weak team counts more heavily against you.
+        Wins over Power 5 teams are weighted higher, while FCS losses penalize more.
+      </li>
+      <li><strong>Strength of Record (SoR):</strong>
+        How a team performed relative to the total quality of its opponent(s).
+        Winning against strong opponents yields bigger multipliers; losing close games is less damaging; winning by multiple scores enhances your strength.
+      </li>
+      <li><strong>Contextual Multipliers:</strong>
+        True away game wins carry extra credit (23–25%).
+        Wins with a bigger scoring margin at home/neutral get a bump (12%).
+        Close losses to strong teams are penalized less (10–12%).
+      </li>
+      <li><strong>Bonus Adjustments:</strong>
+        Teams in the top 10% of scoring offense, scoring defense, or margin of victory get small boosts that reflect elite performance.
+      </li>
+      <li><strong>Power SoR Avg (final metric):</strong>
+        The overall strength-of-record total plus bonus adjustments, normalized by games played.
+        Teams are ranked by this number, with ties sharing the same rank.
+      </li>
+    </ul>
+    <p>
+      <strong>Bottom line:</strong> Whereas AP/Coaches Polls measure <em>perception</em>, this system measures <em>performance + context</em>.
+      It answers:
+    </p>
+    <blockquote>
+      <em>“How strong is a team’s season résumé, when you consider who they beat, where they beat them, and how they performed relative to opponent strength?”</em>
+    </blockquote>
+    <p>
+      It’s designed to surface the teams that have <em>earned</em> their ranking on the field, regardless of brand name or preseason hype.
+    </p>
+    <p><strong>By design, these rankings will look vastly different. Especially early in the season as limited game data has taken place.  Where coaches and associated press polls start out as pure projections, this poll starts with every team in FBS sharing the rank of #1 and adjusts as the results on the field roll in.</strong></p>
+  </div>
 </div>
 <div class="collapse" id="glossaryCollapse">
   <div class="card card-body text-start">
@@ -395,26 +496,26 @@
           <li>Loss vs non-negative OQS by ≤7 (trueAway): -1 + (OQS × 12%).</li>
           <li>Loss by &gt;7 <em>or</em> vs negative OQS: -1 + (OQS × 6%).</li>
           <li>Championship win: 1 + (OQS × 30%).</li>
-          <li>Championship loss: current Strength of Record × 0.90.</li>
+          <li>Championship loss: 1.0.</li>
         </ul>
       </dd>
 
       <dt class="col-sm-3">SoR Avg</dt>
       <dd class="col-sm-9">SoR total divided by games played.</dd>
 
-      <dt class="col-sm-3">Scoring Avg</dt>
+      <dt class="col-sm-3">PF</dt>
       <dd class="col-sm-9">Average points scored per game. Top 10% earns a bonus in Power SoR Avg.</dd>
 
-      <dt class="col-sm-3">Give Avg</dt>
+      <dt class="col-sm-3">PA</dt>
       <dd class="col-sm-9">Average points allowed per game. Bottom 10% (lowest points allowed) earns a bonus in Power SoR Avg.</dd>
 
-      <dt class="col-sm-3">Scoring Margin</dt>
-      <dd class="col-sm-9">Scoring Avg minus Give Avg. Top 10% earns a bonus in Power SoR Avg.</dd>
+      <dt class="col-sm-3">SM</dt>
+      <dd class="col-sm-9">Scoring Avg minus Points Allowed Avg. Top 10% earns a bonus in Power SoR Avg.</dd>
 
       <dt class="col-sm-3">SoS</dt>
       <dd class="col-sm-9">Average opponent quality to date.</dd>
 
-      <dt class="col-sm-3">Power SoR Avg</dt>
+      <dt class="col-sm-3">Power SoR</dt>
       <dd class="col-sm-9">(<em>SoR total</em> + Bonus for Top 10% Scoring Avg, Bottom 10% Give Avg, Top 10% Margin) ÷ games played.</dd>
     </dl>
   </div>
@@ -425,14 +526,14 @@
     <tr>
       <th>Rank</th>
       <th>Team</th>
-      <th>Record</th>
-      <th>Strength of Record</th>
+      <th>W/L</th>
+      <th>SoR</th>
       <th class="sor-col">SoR Avg</th>
-      <th>Scoring Avg</th>
-      <th>Give Avg</th>
-      <th>Scoring Margin</th>
+      <th>PF</th>
+      <th>PA</th>
+      <th>SM</th>
       <th>SoS</th>
-      <th class="col-power-sor psor-col">Power SoR Avg</th>
+      <th class="col-power-sor psor-col">PSoR</th>
     </tr>
   </thead>
   <tbody>
@@ -452,11 +553,21 @@
       <tr>
         <td><%= rank %></td>
         <td><%= r.teamName %></td>
-        <td><%= r.record %></td>
+        <td
+  data-bs-toggle="tooltip"
+  data-bs-placement="top"
+  title="<%= (teamConference[r.teamName] || 'Conf') %> Record [<%= (conferenceRecords[r.teamName]?.confWins || 0) %>-<%= (conferenceRecords[r.teamName]?.confLosses || 0) %>]">
+  <%= r.record %>
+</td>
         <td><%= r.wlqTotal.toFixed(2) %></td>
         <td class="sor-col"><%= r.wlqAvg.toFixed(3) %></td>
         <td><%= r.scoringAvg.toFixed(1) %><% if (r.isTopScoringAvg) { %> (0.2)<% } %></td>
-        <td><%= r.giveAvg.toFixed(1) %><% if (r.isBottomGiveAvg) { %> (0.2)<% } %></td>
+        <td>
+  <%= r.giveAvg.toFixed(1) %>
+  <% if (r.isBottomGiveAvg && (teamStats[r.teamName] && teamStats[r.teamName].gamesPlayed > 0)) { %>
+    (0.2)
+  <% } %>
+</td>
         <td><%= r.marginAvg.toFixed(1) %><% if (r.isTopMarginAvg) { %> (0.5)<% } %></td>
         <td><%= (typeof r.sosAvg === 'number' ? r.sosAvg : 0).toFixed(2) %></td>
         <td class="col-power-sor psor-col"><%= r.powerSorAvg.toFixed(3) %></td>
@@ -492,21 +603,30 @@
       }
     });
     %>
-    <h3 class="team-schedule-title"><%= team %> Schedule (Record: <%= recordToString(stats.wins, stats.losses) %>)</h3>
+    <h3 class="team-schedule-title">
+  <%= team %> Schedule
+  (Record: <%= recordToString(stats.wins, stats.losses) %>)
+  <span class="text-muted" style="font-weight: normal;">
+    &nbsp;Conf:[
+      <%= (conferenceRecords[team]?.confWins || 0) %>-
+      <%= (conferenceRecords[team]?.confLosses || 0) %>
+    ]
+  </span>
+</h3>
   <table border="1" cellspacing="0" cellpadding="5">
     <thead>
       <tr>
         <th>Week</th>
-        <th>Home Team</th>
-        <th>Away Team</th>
+        <th>Home</th>
+        <th>Away</th>
         <th><%= team %> Score</th>
         <th>Opp Score</th>
         <th>Result</th>
-        <th>Record</th>
-        <th>Quality (Change)</th>
-        <th class="sor-col">Strength of Record (Change)</th>
+        <th>W/L</th>
+        <th>QS</th>
+        <th class="sor-col">SoR</th>
         <th>SoS</th>
-        <th>Scoring Margin</th>
+        <th>PF/PA(SM)</th>
       </tr>
     </thead>
     <tbody>
@@ -565,7 +685,13 @@
           <td><%= teamPoints %></td>
           <td><%= oppPoints %></td>
           <td><%= won ? "win" : "loss" %></td>
-          <td><%= runningRecord %></td>
+          <td
+  data-bs-toggle="tooltip"
+  data-bs-placement="top"
+  title="<%= (teamConference[team] || 'Conf') %> Record [<%= (conferenceRecords[team]?.confWins || 0) %>-<%= (conferenceRecords[team]?.confLosses || 0) %>]">
+  <%= runningRecord %>
+</td>
+
           <td><%= runningQualityTotal.toFixed(2) %> (<%= qualityChange.toFixed(2) %>)</td>
           <td><%= runningWlqTotal.toFixed(2) %> (<%= wlqScore.toFixed(2) %>)</td>
           
@@ -607,7 +733,7 @@
   </div>
 
   <div class="footer d-flex justify-content-center align-items-center">
-    <h5>&copy; Taylor Bros. Gaming - 2023</h5>
+    <h5>&copy; Taylor Bros. Gaming - 2025</h5>
   </div>
 
   <style>
@@ -616,79 +742,224 @@
     #rankingsTable th .sort-arrow { font-size: 0.8em; margin-left: .35rem; opacity: .4; }
     #rankingsTable th.active .sort-arrow { opacity: 1; }
   </style>
-  <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    // Fill in the rankings timestamp using user's local timezone
-    const d = new Date();
-    const options = { 
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: 'numeric', minute: '2-digit', hour12: true,
-      timeZoneName: 'short'
-    };
-    const str = d.toLocaleString(undefined, options);
-    const header = document.getElementById("asOfHeader");
-    if (header) header.textContent = "Rankings as of " + str;
 
-    // Table sorting
+ 
+  <script>
+document.addEventListener("DOMContentLoaded", () => {
+  // === Local time header ===
+  try {
+    const d = new Date();
+    const options = { year:'numeric', month:'2-digit', day:'2-digit', hour:'numeric', minute:'2-digit', hour12:true, timeZoneName:'short' };
+    const header = document.getElementById("asOfHeader");
+    if (header) header.textContent = "Rankings as of " + d.toLocaleString(undefined, options);
+  } catch (e) { console.warn("Time header error:", e); }
+
+  // === Rankings table sorting ===
+  try {
     const table = document.getElementById("rankingsTable");
-    if (!table) return;
-    const headers = Array.from(table.querySelectorAll("thead th"));
-    // Seed neutral arrows so headers look sortable
-    headers.forEach(th => {
-      const span = document.createElement("span");
-      span.className = "sort-arrow";
-      span.textContent = "⇅";
-      th.appendChild(span);
-    });
-    const numericFromText = (t) => {
-      const m = t.replace(/,/g, '').match(/-?\\d+(?:\\.\\d+)?/);
-      return m ? parseFloat(m[0]) : NaN;
-    };
-    const recordToPct = (t) => {
-      const m = t.match(/(\\d+)\\s*-\\s*(\\d+)/);
-      if (!m) return NaN;
-      const w = parseInt(m[1],10), l = parseInt(m[2],10);
-      return (w+l)>0 ? w/(w+l) : 0;
-    };
-    const typeOf = (txt) => {
-      const t = txt.trim().toLowerCase();
-      if (t === 'rank') return 'int';
-      if (t === 'team') return 'text';
-      if (t === 'record') return 'record';
-      return 'num';
-    };
-    const setArrow = (th, asc) => {
-      headers.forEach(h => { h.classList.remove('active'); const s=h.querySelector('.sort-arrow'); if (s) s.textContent='⇅'; });
-      const s = th.querySelector('.sort-arrow');
-      if (s) { th.classList.add('active'); s.textContent = asc ? '▲' : '▼'; }
-    };
-    headers.forEach((th, idx) => {
-      th.addEventListener('click', () => {
-        const tbody = table.tBodies[0];
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-        const asc = !(th._asc === true); th._asc = asc;
-        const kind = typeOf(th.childNodes[0].textContent || th.textContent);
-        rows.sort((A,B) => {
-          const aT=(A.cells[idx]?.innerText||'').trim();
-          const bT=(B.cells[idx]?.innerText||'').trim();
-          let aV,bV;
-          if (kind==='int'){ aV=parseInt(aT,10); bV=parseInt(bT,10); }
-          else if (kind==='record'){ aV=recordToPct(aT); bV=recordToPct(bT); }
-          else if (kind==='num'){ aV=numericFromText(aT); bV=numericFromText(bT); }
-          else { aV=aT.toLowerCase(); bV=bT.toLowerCase(); }
-          const aNaN = (typeof aV==='number' && isNaN(aV));
-          const bNaN = (typeof bV==='number' && isNaN(bV));
-          if (aNaN && bNaN) return 0; if (aNaN) return 1; if (bNaN) return -1;
-          if (aV < bV) return asc ? -1 : 1;
-          if (aV > bV) return asc ? 1 : -1;
-          return 0;
-        });
-        rows.forEach(r => tbody.appendChild(r));
-        setArrow(th, asc);
+    if (table) {
+      const headers = Array.from(table.querySelectorAll("thead th"));
+      headers.forEach(th => {
+        const span = document.createElement("span");
+        span.className = "sort-arrow";
+        span.textContent = "⇅";
+        th.appendChild(span);
       });
+
+      const numericFromText = (t) => {
+        const m = t.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+        return m ? parseFloat(m[0]) : NaN;
+      };
+      const recordToPct = (t) => {
+        const m = t.match(/(\d+)\s*-\s*(\d+)/);
+        if (!m) return NaN;
+        const w = parseInt(m[1],10), l = parseInt(m[2],10);
+        return (w+l)>0 ? w/(w+l) : 0;
+      };
+      const typeOf = (txt) => {
+        const t = txt.trim().toLowerCase();
+        if (t === 'rank') return 'int';
+        if (t === 'team') return 'text';
+        if (t === 'w/l') return 'record';
+        return 'num';
+      };
+      const setArrow = (th, asc) => {
+        headers.forEach(h => {
+          h.classList.remove('active');
+          const s=h.querySelector('.sort-arrow'); 
+          if (s) s.textContent='⇅';
+        });
+        const s = th.querySelector('.sort-arrow');
+        if (s) { th.classList.add('active'); s.textContent = asc ? '▲' : '▼'; }
+      };
+
+      headers.forEach((th, idx) => {
+        th.addEventListener('click', () => {
+          const tbody = table.tBodies[0];
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          const asc = !(th._asc === true); th._asc = asc;
+          const kind = typeOf(th.childNodes[0].textContent || th.textContent);
+          rows.sort((A,B) => {
+            const aT=(A.cells[idx]?.innerText||'').trim();
+            const bT=(B.cells[idx]?.innerText||'').trim();
+            let aV,bV;
+            if (kind==='int'){ aV=parseInt(aT,10); bV=parseInt(bT,10); }
+            else if (kind==='record'){ aV=recordToPct(aT); bV=recordToPct(bT); }
+            else if (kind==='num'){ aV=numericFromText(aT); bV=numericFromText(bT); }
+            else { aV=aT.toLowerCase(); bV=bT.toLowerCase(); }
+            const aNaN = (typeof aV==='number' && isNaN(aV));
+            const bNaN = (typeof bV==='number' && isNaN(bV));
+            if (aNaN && bNaN) return 0; if (aNaN) return 1; if (bNaN) return -1;
+            if (aV < bV) return asc ? -1 : 1;
+            if (aV > bV) return asc ? 1 : -1;
+            return 0;
+          });
+          rows.forEach(r => tbody.appendChild(r));
+          setArrow(th, asc);
+        });
+      });
+    }
+  } catch (e) { console.warn("Sorting init error:", e); }
+
+  // === Header tooltips (Rankings + Team tables) ===
+  try {
+    const headerLongNames = {
+      "Rank": "Ranking",
+      "Team": "Team",
+      "W/L": "Wins–Losses",
+      "SoR": "Strength of Record",
+      "SoR Avg": "Strength of Record Average",
+      "PF": "Scoring Average",
+      "PA": "Points Allowed Average",
+      "SM": "Scoring Margin",
+      "PF/PA(SM)": "Scoring Avg, Points Allowed Avg, (Scoring Margin)",
+      "SoS": "Strength of Schedule",
+      "PSoR": "Power Strength of Record",
+      "Week": "Week of Season",
+      "Home": "Home Team",
+      "Away": "Away Team",
+      "Score": "Points Scored",
+      "Opp Score": "Opponent Points Scored",
+      "Result": "Win or Loss",
+      "Record": "Overall Record",
+      "QS": "Cumulative Quality Score (Change from this game)",
+      "SoR": "Strength of Record Total (Change from this game)"
+    };
+    const allThs = document.querySelectorAll("table thead th");
+    allThs.forEach(th => {
+      const label = (th.childNodes[0]?.textContent || th.textContent || "").trim();
+      const longName = headerLongNames[label];
+      if (longName) {
+        th.setAttribute("data-bs-toggle", "tooltip");
+        th.setAttribute("data-bs-placement", "top");
+        th.setAttribute("title", longName);
+        th.setAttribute("aria-label", longName);
+      }
+    });
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(el => { new bootstrap.Tooltip(el, { container: 'body' }); });
+  } catch (e) { console.warn("Tooltip init error:", e); }
+
+  // === Mobile navbar links -> modal open ===
+  const navCollapseEl = document.getElementById("navbarExample01"); // collapse container id
+  const infoModalEl   = document.getElementById("infoModal");
+  const infoTitleEl   = document.getElementById("infoModalTitle");
+  const infoBodyEl    = document.getElementById("infoModalBody");
+
+  const getNavCollapse = () => {
+    if (!navCollapseEl) return null;
+    let inst = bootstrap.Collapse.getInstance(navCollapseEl);
+    if (!inst) inst = new bootstrap.Collapse(navCollapseEl, { toggle: false });
+    return inst;
+  };
+  const getModal = () => {
+    if (!infoModalEl) return null;
+    let inst = bootstrap.Modal.getInstance(infoModalEl);
+    if (!inst) inst = new bootstrap.Modal(infoModalEl, { backdrop: true, keyboard: true });
+    return inst;
+  };
+
+  // Close modal when clicking inside modal content (in addition to backdrop + X)
+  if (infoModalEl) {
+    infoModalEl.addEventListener('shown.bs.modal', () => {
+      const content = document.getElementById('infoModalContent');
+      const onClickToClose = (e) => {
+        if (content.contains(e.target)) {
+          const modal = getModal();
+          if (modal) modal.hide();
+        }
+      };
+      content.addEventListener('click', onClickToClose, { once: true });
+    });
+  }
+
+  function openInfo(which) {
+    const isAbout = which === 'about';
+    const srcCard = document.querySelector(isAbout ? '#aboutCollapse .card' : '#glossaryCollapse .card');
+    if (!srcCard) { console.warn("Source content not found for", which); return; }
+
+    if (infoTitleEl) infoTitleEl.textContent = isAbout ? 'About This Ranking System' : 'Glossary';
+    if (infoBodyEl) infoBodyEl.innerHTML = srcCard.innerHTML;
+
+    const modal = getModal();
+    if (modal) modal.show();
+    else console.warn("Modal instance not available");
+  }
+
+  const mobileLinks = document.querySelectorAll('.js-open-info[data-info]');
+  mobileLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const which = link.getAttribute('data-info');
+      if (!which) return;
+
+      if (window.innerWidth < 992) { // mobile
+        const nav = getNavCollapse();
+        if (nav && navCollapseEl && navCollapseEl.classList.contains('show')) {
+          const onHidden = () => {
+            navCollapseEl.removeEventListener('hidden.bs.collapse', onHidden);
+            openInfo(which);
+          };
+          navCollapseEl.addEventListener('hidden.bs.collapse', onHidden);
+          nav.hide();
+        } else {
+          openInfo(which);
+        }
+      } else {
+        // Desktop: toggle in-page collapsibles
+        const targetId = which === 'about' ? '#aboutCollapse' : '#glossaryCollapse';
+        const target = document.querySelector(targetId);
+        if (target) {
+          let inst = bootstrap.Collapse.getInstance(target);
+          if (!inst) inst = new bootstrap.Collapse(target, { toggle: false });
+          inst.toggle();
+          const navH = (document.querySelector('.navbar.fixed-top')?.offsetHeight || 0) + 8;
+          const top = target.getBoundingClientRect().top + window.pageYOffset - navH;
+          window.scrollTo({ top, behavior: 'smooth' });
+        }
+      }
     });
   });
-  </script>
+});
+</script>
+
+
+<!-- Generic Info Modal -->
+<div class="modal fade" id="infoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" id="infoModalContent">
+      <div class="modal-header">
+        <h5 class="modal-title" id="infoModalTitle">Info</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="infoModalBody">
+        <!-- injected dynamically -->
+      </div>
+    </div>
+  </div>
+</div>
+
+
 
 </body>
 </html>
