@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <title>Playoff Tracker 2024</title>
+  <title>Playoff Tracker 2025</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Latest compiled and minified CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
@@ -105,7 +105,9 @@
                     </a>
                   </li>
                 <% } %>
+                
               </ul>
+            </li>
               <!-- Mobile-only extra items (About & Glossary) -->
 <ul class="navbar-nav d-lg-none mt-2">
   <li class="nav-item">
@@ -130,6 +132,7 @@
     <div class="row text-center" style="display:flex; flex-wrap: wrap">
       <div class="container" style="margin-top: 80px;">
         <div class="row">
+          
 
           <%
           // Helper functions
@@ -165,7 +168,10 @@
               qualityTotal: 0,
               wlqTotal: 0,
               gamesPlayed: 0,
-              gameStats: []
+              gameStats: [],
+              hasChampionship: false,
+              wonChampionship: false,
+              lostChampionship: false
             };
           });
 
@@ -173,7 +179,7 @@
           // ---------- PASS 1: build wins/losses and quality totals ----------
           //
           games.forEach(game => {
-            if (!game.completed) return; // ✅ Skip incomplete games
+            if (!game.completed) return; // still skip incomplete
 
             ['home', 'away'].forEach(side => {
               const team = game[side + 'Team'];
@@ -185,25 +191,85 @@
               const opponentClass = game[oppSide + 'Classification'];
               const opponentConf = game[oppSide + 'Conference'];
 
-              const teamPoints = game[side + 'Points'];
-              const oppPoints = game[oppSide + 'Points'];
+              const teamPoints = Number(game[side + 'Points'] || 0);
+              const oppPoints  = Number(game[oppSide + 'Points'] || 0);
               const won = teamPoints > oppPoints;
 
-               // ✅ Capture team’s conference name if available
-      const teamConf = game[side + 'Conference'];
-      if (teamConf && !teamConference[team]) {
-        teamConference[team] = teamConf;
-      }
+              // capture team’s conference name if available
+              const teamConf = game[side + 'Conference'];
+              if (teamConf && !teamConference[team]) teamConference[team] = teamConf;
+
+              const isChampionship = String(game.notes || game.gameName || '').toLowerCase().includes('championship');
+
+              // For table display we include championship games, but we DO NOT add them to QS/SoR totals
+              if (isChampionship) {
+                teamStats[team].gameStats.push({
+                  game,
+                  won,
+                  qualityChange: 0, // excluded from QS
+                  opponent,
+                  opponentClass,
+                  opponentConf,
+                  isChampionship: true
+                });
+                teamStats[team].hasChampionship = true;
+                if (won) teamStats[team].wonChampionship = true;
+                else teamStats[team].lostChampionship = true;
+                // Do NOT increment wins/losses/gamesPlayed/qualityTotal here
+                return;
+              }
 
               const opponentInPower = isPowerConf(opponentConf, opponent);
 
               let qualityChange = 0;
               if (opponentClass === 'fcs') {
-                qualityChange = won ? 0.0 : -2.0;
+                qualityChange = won ? 0.25 : -2.25;
               } else if (opponentInPower) {
-                qualityChange = won ? 1.35 : -0.5;
+                // QS override per your rules
+                const homeIsTeam = (game[side + 'Team'] === game.homeTeam);
+                const trueAway   = (game.awayTeam === game[side + 'Team']) && (game.neutralSite === false);
+                const margin     = homeIsTeam ? (teamPoints - oppPoints) : (teamPoints - oppPoints);
+                const bigWin     = margin > 13;
+                const oppName    = opponent;
+                const oppNegQS   = (teamStats[oppName] && teamStats[oppName].qualityTotal < 0);
+
+                if (won) {
+                  if (oppNegQS) qualityChange = 1.20;
+                  else if (trueAway && bigWin) qualityChange = 2.05;
+                  else if (!trueAway && bigWin) qualityChange = 1.85;
+                  else if (trueAway && !bigWin) qualityChange = 1.70;
+                  else qualityChange = 1.50;
+                } else {
+                  const closeLoss = (margin < 0) && ((-margin) < 8);
+                  if (oppNegQS) qualityChange = -1.10;
+                  else if (trueAway && closeLoss) qualityChange = -0.20;
+                  else if (!trueAway && closeLoss) qualityChange = -0.40;
+                  else if (trueAway && !closeLoss) qualityChange = -0.70;
+                  else qualityChange = -0.85;
+                }
               } else if (opponentClass === 'fbs') {
-                qualityChange = won ? 1.0 : -1.0;
+                // Non-power FBS
+                const homeIsTeam = (game[side + 'Team'] === game.homeTeam);
+                const trueAway   = (game.awayTeam === game[side + 'Team']) && (game.neutralSite === false);
+                const margin     = homeIsTeam ? (teamPoints - oppPoints) : (teamPoints - oppPoints);
+                const bigWin     = margin > 13;
+                const oppName    = opponent;
+                const oppNegQS   = (teamStats[oppName] && teamStats[oppName].qualityTotal < 0);
+
+                if (won) {
+                  if (oppNegQS) qualityChange = 1.00;
+                  else if (trueAway && bigWin) qualityChange = 1.60;
+                  else if (!trueAway && bigWin) qualityChange = 1.40;
+                  else if (trueAway && !bigWin) qualityChange = 1.25;
+                  else qualityChange = 1.10;
+                } else {
+                  const closeLoss = (margin < 0) && ((-margin) < 8);
+                  if (oppNegQS) qualityChange = -1.30;
+                  else if (trueAway && closeLoss) qualityChange = -0.35;
+                  else if (!trueAway && closeLoss) qualityChange = -0.55;
+                  else if (trueAway && !closeLoss) qualityChange = -0.85;
+                  else qualityChange = -1.15;
+                }
               }
 
               if (won) teamStats[team].wins++;
@@ -213,16 +279,12 @@
               teamStats[team].qualityTotal += qualityChange;
 
               if (game.conferenceGame) {
-  if (!conferenceRecords[team]) {
-    conferenceRecords[team] = { confWins: 0, confLosses: 0 };
-  }
-  if (won) {
-    conferenceRecords[team].confWins++;
-  } else {
-    conferenceRecords[team].confLosses++;
-  }
-}
-
+                if (!conferenceRecords[team]) {
+                  conferenceRecords[team] = { confWins: 0, confLosses: 0 };
+                }
+                if (won) conferenceRecords[team].confWins++;
+                else conferenceRecords[team].confLosses++;
+              }
 
               // Store game info for later WLQ calculation
               teamStats[team].gameStats.push({
@@ -231,13 +293,39 @@
                 qualityChange,
                 opponent,
                 opponentClass,
-                opponentConf
+                opponentConf,
+                isChampionship: false
               });
             });
           });
 
           //
           // ---------- PASS 2: calculate WLQ scores using cumulative opponent totals ----------
+          // === SoR Tier Percentile Helpers (descending: 0 = best QS) ===
+          (function(){
+            if (typeof __sorTierHelpersInserted === 'undefined') {
+              var __sorTierHelpersInserted = true;
+              var __fbsTeams = (Array.isArray(fbsTeams) && fbsTeams.length) ? fbsTeams : Object.keys(teamStats || {});
+              var __allQS_forTiers = __fbsTeams.map(function(t){ return Number((teamStats[t] && teamStats[t].qualityTotal) || 0); });
+              var __sortedQSdesc_forTiers = __allQS_forTiers.slice().sort(function(a,b){ return b - a; });
+              function __percentileRankDesc_forTiers(x){
+                var n = __sortedQSdesc_forTiers.length;
+                if (n <= 1) return 1;
+                var greater = 0;
+                for (var i=0;i<n;i++){
+                  if (__sortedQSdesc_forTiers[i] > x) greater++;
+                  else break;
+                }
+                var p = greater / (n - 1);
+                if (p < 0) p = 0;
+                if (p > 1) p = 1;
+                return p;
+              }
+              // expose globally for template scope
+              globalThis.__percentileRankDesc_forTiers = __percentileRankDesc_forTiers;
+            }
+          })();
+
           //
           fbsTeams.forEach(team => {
             const t = teamStats[team];
@@ -246,9 +334,10 @@
             t.wlqTotal = 0; // reset; accumulate fresh from per-game results
 
             t.gameStats.forEach(g => {
-              const { game, won, opponent, opponentClass } = g;
-              const isChampionship = (game.notes || '').toLowerCase().includes('championship');
-              const opponentQuality = (teamStats[opponent] && teamStats[opponent].qualityTotal) || 0;
+              const { game, won, opponent, opponentClass, isChampionship } = g;
+
+              // Skip championship from SoR (wlq) calculations
+              if (isChampionship) { g.wlqScore = 0; return; }
 
               // Point differential from `team` perspective
               const teamIsHome = (game.homeTeam === team);
@@ -260,58 +349,53 @@
 
               let wlqScore = 0;
 
-              if (opponentClass === 'fcs') {
-                // FCS: wins = 0, losses = -1.5 (except championship loss uses current SoR × 0.90)
-                if (won) {
-                  wlqScore = 0.0;
-                } else {
-                  wlqScore = isChampionship ? (t.wlqTotal * 0.90) : -2.0;
-                }
-              } else if (opponentClass === 'fbs') {
-                // ---- Win multipliers ----
-                // Base: 10%
-                // True away win: 23% (≤10 pts), 25% (>10 pts)
-                // Home/neutral win by >10: 12%
-                // BUT: if opponentQuality < 0, always 10% (override)
-                let winMult = 0.10;
-                if (won) {
-                  if (opponentQuality < 0) {
-                    winMult = 0.10; // negative OQS override
-                  } else if (isTrueAway) {
-                    winMult = (pointDiff > 10) ? 0.25 : 0.23;
-                  } else if (pointDiff > 10) {
-                    winMult = 0.12;
-                  }
-                }
+              // === New SoR: Tiered by opponent QS percentile (straight scores, no multipliers) ===
+              var __homeIsTeam = (game.homeTeam === team);
+              var __pointDiff = __homeIsTeam
+                ? (Number(game.homePoints || 0) - Number(game.awayPoints || 0))
+                : (Number(game.awayPoints || 0) - Number(game.homePoints || 0));
 
-                // ---- Loss multipliers ----
-                // If opponentQuality ≥ 0 and close loss (pointDiff ≥ -7):
-                //   trueAway = 12%, else = 10%
-                // Else (loss by >7 OR opponentQuality < 0): 6%
-                let lossMult = 0.06;
-                if (!won) {
-                  if (opponentQuality >= 0 && pointDiff >= -7) {
-                    lossMult = isTrueAway ? 0.12 : 0.10;
-                  } else {
-                    lossMult = 0.06;
-                  }
-                }
+              var __isTrueAway = (game.awayTeam === team) && (game.neutralSite === false);
+              var __bigWin     = (__pointDiff > 13);
+              var __closeLoss  = (__pointDiff < 0) && ((-__pointDiff) < 8);
 
-                // ---- Championship overrides ----
-                if (isChampionship) {
+              var __oppClass = String(opponentClass || '').toLowerCase();
+              var __oppQS = Number(((teamStats[opponent] && teamStats[opponent].qualityTotal) || 0));
+              var __pRank = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(__oppQS) : 1;
+
+              function __winBase(p){
+                if (p <= 0.10) return 2.35;
+                if (p <= 0.35) return 2.0;
+                if (p <= 0.55) return 1.55;
+                if (p <= 0.75) return 1.15;
+                return 1.0; // bottom 10%
+              }
+              function __lossBase(p){
+                if (p <= 0.10) return -0.7;
+                if (p <= 0.35) return -0.85;
+                if (p <= 0.55) return -1.05;
+                if (p <= 0.75) return -1.3;
+                return -1.6; // bottom 10%
+              }
+
+              if (__oppClass === 'fcs') {
+                wlqScore = won ? 0.25 : -2.25;
+              } else { // fbs
+                var __base = won ? __winBase(__pRank) : __lossBase(__pRank);
+                var __isBottom10 = (__pRank > 0.90);
+                var __bonus = 0;
+                if (!__isBottom10) {
                   if (won) {
-                    wlqScore = 1 + opponentQuality * 0.30;     // championship win
+                    if (__isTrueAway) __bonus += 0.1;
+                    if (__bigWin)     __bonus += 0.1;
+                    if (__isTrueAway && __bigWin) __bonus += 0.1;
                   } else {
-                    wlqScore = 1.0;              
+                    if (__isTrueAway) __bonus += 0.1;
+                    if (__closeLoss)  __bonus += 0.1;
+                    if (__isTrueAway && __closeLoss) __bonus += 0.1;
                   }
-                } else {
-                  wlqScore = won
-                    ? (1 + opponentQuality * winMult)
-                    : (-1 + opponentQuality * lossMult);
                 }
-              } else {
-                // Fallback if opponentClass is unknown
-                wlqScore = won ? 1 : -1;
+                wlqScore = __base + __bonus;
               }
 
               t.wlqTotal += wlqScore;
@@ -319,27 +403,52 @@
             });
           });
 
-          // Rankings Table
-          const rankings = fbsTeams.map(team => {
-            const s = teamStats[team];
-            return {
-              teamName: team,
-              record: recordToString(s.wins, s.losses),
-              wlqTotal: s.wlqTotal,
-              wlqAvg: s.gamesPlayed > 0 ? s.wlqTotal / s.gamesPlayed : 0
-            };
-          }).sort((a, b) => b.wlqAvg - a.wlqAvg);
-          %>
+          
+  // Rankings Table
+  // Determine latest completed week across all games
+  let latestCompletedWeek = 0;
+  (games || []).forEach(gm => {
+    if (gm && gm.completed) {
+      const w = Number(gm.week || 0);
+      if (w > latestCompletedWeek) latestCompletedWeek = w;
+    }
+  });
+  const weekFrac = Math.min(Math.max(latestCompletedWeek, 0), 12) / 12;
+
+  const rankings = fbsTeams.map(team => {
+    const s = teamStats[team];
+
+    const gstats = (s.gameStats || []);
+    const denom = (s.gamesPlayed || 0); // champs excluded already
+
+    // If denom becomes 0 (e.g., only an FCS win so far), show wlqTotal (no divide) to avoid NaN
+    const wlqAvgAdjusted = denom > 0 ? (s.wlqTotal / denom) : s.wlqTotal;
+
+    const __dispW = s.wins + (s.wonChampionship?1:0);
+    const __dispL = s.losses + (s.lostChampionship?1:0);
+    return {
+      teamName: team,
+      record: recordToString(__dispW, __dispL),
+      wlqTotal: s.wlqTotal,
+      wlqAvg: wlqAvgAdjusted,
+      sorDenomDebug: denom,
+      hasChampionship: !!s.hasChampionship,
+      wonChampionship: !!s.wonChampionship,
+      lostChampionship: !!s.lostChampionship
+    };
+  }).sort((a, b) => b.wlqAvg - a.wlqAvg);
+%>
+
 
 <%
   // -------- Additional per-team averages, SoS, bonuses, and resort --------
-  // (Timestamp string removed; we'll render the time in the user's local TZ via JS)
 
-  // Per-team season averages based on completed games
+  // Per-team season averages based on completed (non-champ) games for PF/PA/SM
   rankings.forEach(r => {
     const s = teamStats[r.teamName];
     let tPts = 0, oPts = 0, cnt = 0;
-    (s.gameStats || []).forEach(({game}) => {
+    (s.gameStats || []).forEach(({game, isChampionship}) => {
+      if (!game || isChampionship) return; // exclude champ from PF/PA/SM too
       const homeIsTeam = game.homeTeam === r.teamName;
       const teamPoints = homeIsTeam ? Number(game.homePoints || 0) : Number(game.awayPoints || 0);
       const oppPoints  = homeIsTeam ? Number(game.awayPoints || 0) : Number(game.homePoints || 0);
@@ -349,7 +458,7 @@
     r.giveAvg    = cnt ? (oPts / cnt) : 0;
     r.marginAvg  = r.scoringAvg - r.giveAvg;
 
-    // SoS average: opponents' quality totals to date
+    // SoS average: opponents' quality totals to date (all completed incl champ display, but opp QS excludes champ inherently)
     {
       let sosSum = 0, sosCnt = 0;
       (typeof games !== 'undefined' && Array.isArray(games) ? games : (typeof locals !== 'undefined' && locals && Array.isArray(locals.games) ? locals.games : [])).forEach((game) => {
@@ -359,7 +468,7 @@
         const oppClass = (game.homeTeam === r.teamName) ? (game.awayClassification || 'fbs') : (game.homeClassification || 'fbs');
         let oppQ;
         if (oppClass === 'fcs' || !teamStats[opp]) {
-          oppQ = -2.0;  // FCS or untracked opponent
+          oppQ = -2.25;  // FCS or untracked opponent
         } else {
           oppQ = Number(teamStats[opp].qualityTotal) || 0;
         }
@@ -386,23 +495,43 @@
     r.isTopMarginAvg  = r.marginAvg >= marginCut;
   });
 
- // Power SoR Avg: (Strength of Record total + bonuses) / gamesPlayed
+ // Power SoR Avg: bonuses + CHAMPIONSHIP bonus applied PRE-AVERAGE
 rankings.forEach(r => {
-  const gp = (teamStats[r.teamName] && teamStats[r.teamName].gamesPlayed) ? teamStats[r.teamName].gamesPlayed : 0;
-  const giveBonusEligible = (gp > 0) && r.isBottomGiveAvg;   // ← only if they've played
-  const bonus = (r.isTopScoringAvg ? 0.2 : 0)
-             + (giveBonusEligible ? 0.2 : 0)
-             + (r.isTopMarginAvg ? 0.5 : 0);
-  r.powerSorAvg = gp > 0 ? (r.wlqTotal + bonus) / gp : 0;
+  const s = teamStats[r.teamName] || { gamesPlayed: 0, gameStats: [] };
+  const denomWeighted = (s.gamesPlayed || 0); // champs excluded
+
+  const gp = s.gamesPlayed || 0;
+  const giveBonusEligible = (gp > 0) && r.isBottomGiveAvg; // unchanged eligibility rule
+
+  // Base bonuses, scaled by weekFrac (capped at 12/12)
+  const pfBase = 0.3, paBase = 0.3, smBase = 0.8;
+  const pfAmt = r.isTopScoringAvg ? (pfBase * weekFrac) : 0;
+  const paAmt = giveBonusEligible ? (paBase * weekFrac) : 0;
+  const smAmt = r.isTopMarginAvg ? (smBase * weekFrac) : 0;
+  const bonus = pfAmt + paAmt + smAmt;
+
+  // Championship pre-avg bonus (display champ in record via asterisk only for winners)
+  let champBonus = 0;
+  if (s.wonChampionship) champBonus = 0.30;
+  else if (s.lostChampionship) champBonus = -0.10;
+
+  r.appliedPfBonus = pfAmt;
+  r.appliedPaBonus = paAmt;
+  r.appliedSmBonus = smAmt;
+  r.appliedChampBonus = champBonus;
+
+  const totalPreAvg = r.wlqTotal + bonus + champBonus;
+  r.pSorDenomDebug = denomWeighted;
+  r.powerSorAvg = denomWeighted > 0 ? (totalPreAvg / denomWeighted) : totalPreAvg;
 });
-
-
-  // Resort rankings by Power SoR Avg (desc)
   rankings.sort((a, b) => b.powerSorAvg - a.powerSorAvg);
 %>
 
 <h2 id="asOfHeader">Rankings as of ...</h2>
 <p class="mobile-note">(For more data, open website on a computer.)</p>
+<p class="text-muted small mb-2">* denotes a conference championship winner</p>
+
+
 
 <!-- Buttons row (equal width) -->
 <div class="row mt-2 mb-3 d-none d-lg-flex">
@@ -431,7 +560,7 @@ rankings.forEach(r => {
       this ranking system is <em>data-driven</em> and recalculates team strength after every game using objective metrics.
     </p>
     <p>
-      It doesn’t rely on reputation, preseason expectations, or “eye tests.” Instead, it builds a team’s standing from the ground up by tracking:
+      It doesn’t rely on reputation, preseason expectations, or the name on the jersey. Instead, it builds a team’s standing from the ground up by tracking:
     </p>
     <ul>
       <li><strong>Quality of Wins and Losses (Quality Score):</strong>
@@ -440,83 +569,102 @@ rankings.forEach(r => {
       </li>
       <li><strong>Strength of Record (SoR):</strong>
         How a team performed relative to the total quality of its opponent(s).
-        Winning against strong opponents yields bigger multipliers; losing close games is less damaging; winning by multiple scores enhances your strength.
+        Winning against strong opponents yields bigger values; close losses are less damaging; true-away and big-margin wins give extra credit.
       </li>
-      <li><strong>Contextual Multipliers:</strong>
-        True away game wins carry extra credit (23–25%).
-        Wins with a bigger scoring margin at home/neutral get a bump (12%).
-        Close losses to strong teams are penalized less (10–12%).
-      </li>
-      <li><strong>Bonus Adjustments:</strong>
-        Teams in the top 10% of scoring offense, scoring defense, or margin of victory get small boosts that reflect elite performance.
+      <li><strong>Contextual Bonuses:</strong>
+        True away wins and big-margin wins add small fixed bonuses in SoR tiers (except bottom 10% opponents).
       </li>
       <li><strong>Power SoR Avg (final metric):</strong>
-        The overall strength-of-record total plus bonus adjustments, normalized by games played.
-        Teams are ranked by this number, with ties sharing the same rank.
+        The overall strength-of-record total plus bonus adjustments (PF/PA/SM), <em>and any championship bonus</em>, normalized by games played.
       </li>
     </ul>
-    <p>
-      <strong>Bottom line:</strong> Whereas AP/Coaches Polls measure <em>perception</em>, this system measures <em>performance + context</em>.
-      It answers:
-    </p>
-    <blockquote>
-      <em>“How strong is a team’s season résumé, when you consider who they beat, where they beat them, and how they performed relative to opponent strength?”</em>
-    </blockquote>
-    <p>
-      It’s designed to surface the teams that have <em>earned</em> their ranking on the field, regardless of brand name or preseason hype.
-    </p>
-    <p><strong>By design, these rankings will look vastly different. Especially early in the season as limited game data has taken place.  Where coaches and associated press polls start out as pure projections, this poll starts with every team in FBS sharing the rank of #1 and adjusts as the results on the field roll in.</strong></p>
+    <p><strong>By design, these rankings will look vastly different.</strong> Early in the season, limited game data can shift ratings rapidly. This model starts with every team tied for #1 and lets on-field results separate them over time.</p>
   </div>
 </div>
 <div class="collapse" id="glossaryCollapse">
   <div class="card card-body text-start">
     <dl class="row mb-0">
       <dt class="col-sm-3">Rank</dt>
-      <dd class="col-sm-9">Ordering based on <strong>Power SoR Avg</strong> (higher is better), with ties sharing a rank.</dd>
+      <dd class="col-sm-9">Ordering based on <strong>PSoR Avg</strong> (higher is better), with ties sharing a rank.</dd>
 
       <dt class="col-sm-3">Team</dt>
       <dd class="col-sm-9">FBS teams detected from the season schedule.</dd>
 
       <dt class="col-sm-3">Record</dt>
-      <dd class="col-sm-9">Wins–Losses through completed games.</dd>
+      <dd class="col-sm-9">Wins–Losses through completed games. <em>* denotes a conference championship winner</em>. Championship games are shown in team tables but excluded from QS and SoR totals.</dd>
 
-      <dt class="col-sm-3">Quality Score</dt>
-      <dd class="col-sm-9">Sum of results versus opponents. +1.35 for P5 win, -0.5 for P5 loss, +1.0 for FBS win, -1.0 for FBS loss, 0.0 for FCS win, -2.0 for FCS loss.</dd>
-
-      <dt class="col-sm-3">Strength of Record</dt>
+      <dt class="col-sm-3">Quality Score (QS)</dt>
       <dd class="col-sm-9">
-        How a team did versus an opponent's total accumulated quality score.
+        Cumulative score from each game, based on opponent type, location, and margin:
         <ul>
-          <li>Win home/neutral: 1 + (OQS × 10%).</li>
-          <li>Win home/neutral by &gt;10: 1 + (OQS × 12%).</li>
-          <li>Win on the road by ≤10: 1 + (OQS × 23%).</li>
-          <li>Win on the road by &gt;10: 1 + (OQS × 25%).</li>
-          <li><strong>Any win vs negative OQS:</strong> 1 + (OQS × 10%).</li>
-          <li>Loss vs non-negative OQS by ≤7 (home/neutral): -1 + (OQS × 10%).</li>
-          <li>Loss vs non-negative OQS by ≤7 (trueAway): -1 + (OQS × 12%).</li>
-          <li>Loss by &gt;7 <em>or</em> vs negative OQS: -1 + (OQS × 6%).</li>
-          <li>Championship win: 1 + (OQS × 30%).</li>
-          <li>Championship loss: 1.0.</li>
+          <li><strong>Power FBS (P5):</strong>
+            <ul>
+              <li>Win away by &gt;13 → 2.05</li>
+              <li>Win home by &gt;13 → 1.85</li>
+              <li>Win away by ≤13 → 1.70</li>
+              <li>Win home by ≤13 → 1.50</li>
+              <li>Win vs opponent with negative QS → 1.20</li>
+              <li>Loss away by &lt;8 → -0.20</li>
+              <li>Loss home by &lt;8 → -0.40</li>
+              <li>Loss away by ≥8 → -0.70</li>
+              <li>Loss home by ≥8 → -0.85</li>
+              <li>Loss vs opponent with negative QS → -1.10</li>
+            </ul>
+          </li>
+          <li><strong>Non-Power FBS (G5):</strong>
+            <ul>
+              <li>Win away by &gt;13 → 1.60</li>
+              <li>Win home by &gt;13 → 1.40</li>
+              <li>Win away by ≤13 → 1.25</li>
+              <li>Win home by ≤13 → 1.10</li>
+              <li>Win vs opponent with negative QS → 1.00</li>
+              <li>Loss away by &lt;8 → -0.35</li>
+              <li>Loss home by &lt;8 → -0.55</li>
+              <li>Loss away by ≥8 → -0.85</li>
+              <li>Loss home by ≥8 → -1.15</li>
+              <li>Loss vs opponent with negative QS → -1.30</li>
+            </ul>
+          </li>
+          <li><strong>FCS Opponents:</strong> Win = 0.25; Loss = -2.25</li>
         </ul>
       </dd>
 
+      <dt class="col-sm-3">Strength of Record (SoR)</dt>
+      <dd class="col-sm-9">
+        Per-game scores tiered by opponent <em>QS percentile</em> (descending; 0 = best QS):
+        <ul>
+          <li>FCS win = 0.25; FCS loss = -2.25</li>
+          <li>Top 10% opponent: Win = 2.35, Loss = -0.7</li>
+          <li>10.1–35%: Win = 2.0, Loss = -0.85</li>
+          <li>35.1–55%: Win = 1.55, Loss = -1.05</li>
+          <li>55.1–75%: Win = 1.15, Loss = -1.3</li>
+          <li>Bottom 25%: Win = 1.0, Loss = -1.6</li>
+        </ul>
+        <strong>Bonuses (not applied to bottom-10% tier):</strong>
+        <ul>
+          <li>Wins: +0.1 true away, +0.1 win by &gt;13, +0.1 extra if both (max +0.3)</li>
+          <li>Losses: +0.1 true away, +0.1 loss by &lt;8, +0.1 extra if both (max +0.3)</li>
+        </ul>
+        <em>Championship games are excluded from SoR.</em>
+      </dd>
+
       <dt class="col-sm-3">SoR Avg</dt>
-      <dd class="col-sm-9">SoR total divided by games played.</dd>
+      <dd class="col-sm-9">SoR total ÷ <em>all games played to date</em> (championship games excluded from SoR total by rule).</dd>
 
       <dt class="col-sm-3">PF</dt>
-      <dd class="col-sm-9">Average points scored per game. Top 10% earns a bonus in Power SoR Avg.</dd>
+      <dd class="col-sm-9">Average points scored per game. Top 10% earns a +0.3 bonus in PSoR Avg, scaled by current week/12.</dd>
 
       <dt class="col-sm-3">PA</dt>
-      <dd class="col-sm-9">Average points allowed per game. Bottom 10% (lowest points allowed) earns a bonus in Power SoR Avg.</dd>
+      <dd class="col-sm-9">Average points allowed per game. Bottom 10% (best defenses) earn a +0.3 bonus, scaled by current week/12.</dd>
 
       <dt class="col-sm-3">SM</dt>
-      <dd class="col-sm-9">Scoring Avg minus Points Allowed Avg. Top 10% earns a bonus in Power SoR Avg.</dd>
+      <dd class="col-sm-9">Scoring Margin (PF − PA). Top 10% earns a +0.8 bonus, scaled by current week/12.</dd>
 
       <dt class="col-sm-3">SoS</dt>
-      <dd class="col-sm-9">Average opponent quality to date.</dd>
+      <dd class="col-sm-9">Average opponent cumulative QS to date.</dd>
 
-      <dt class="col-sm-3">Power SoR</dt>
-      <dd class="col-sm-9">(<em>SoR total</em> + Bonus for Top 10% Scoring Avg, Bottom 10% Give Avg, Top 10% Margin) ÷ games played.</dd>
+      <dt class="col-sm-3">Power SoR (PSoR)</dt>
+      <dd class="col-sm-9">(SoR total + PF/PA/SM bonuses + <strong>Championship Bonus</strong>) ÷ <em>games played</em>. Championship Bonus: <strong>+0.30</strong> for a championship win, <strong>-0.10</strong> for a championship loss. Applied <em>before</em> averaging.</dd>
     </dl>
   </div>
 </div>
@@ -527,6 +675,7 @@ rankings.forEach(r => {
       <th>Rank</th>
       <th>Team</th>
       <th>W/L</th>
+      <th>QS</th>
       <th>SoR</th>
       <th class="sor-col">SoR Avg</th>
       <th>PF</th>
@@ -542,7 +691,7 @@ rankings.forEach(r => {
       let lastRank = 0;
       rankings.forEach((r, i) => {
         let rank;
-        if (!isNaN(lastPower) && r.powerSorAvg.toFixed(3) === lastPower.toFixed(3)) {
+        if (!isNaN(lastPower) && r.powerSorAvg.toFixed(4) === lastPower.toFixed(4)) {
           rank = lastRank;
         } else {
           rank = i + 1;
@@ -552,29 +701,124 @@ rankings.forEach(r => {
     %>
       <tr>
         <td><%= rank %></td>
-        <td><%= r.teamName %></td>
+        <td><a class="text-decoration-none js-team-link" href="#team-<%= r.teamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') %>"><%= r.teamName %></a></td>
         <td
   data-bs-toggle="tooltip"
   data-bs-placement="top"
   title="<%= (teamConference[r.teamName] || 'Conf') %> Record [<%= (conferenceRecords[r.teamName]?.confWins || 0) %>-<%= (conferenceRecords[r.teamName]?.confLosses || 0) %>]">
-  <%= r.record %>
+  <%= r.record %><%= r.wonChampionship ? '*' : '' %>
 </td>
+        <td><%= (teamStats[r.teamName] && teamStats[r.teamName].qualityTotal ? teamStats[r.teamName].qualityTotal : 0).toFixed(2) %></td>
         <td><%= r.wlqTotal.toFixed(2) %></td>
-        <td class="sor-col"><%= r.wlqAvg.toFixed(3) %></td>
-        <td><%= r.scoringAvg.toFixed(1) %><% if (r.isTopScoringAvg) { %> (0.2)<% } %></td>
+        <td class="sor-col">
+  <button type="button" class="btn btn-link p-0 js-open-calc" data-kind="sor" data-team="<%= r.teamName %>"><%= r.wlqAvg.toFixed(3) %>
+  </button>
+</td>
+        <td><%= r.scoringAvg.toFixed(1) %><% if (r.isTopScoringAvg) { %> (0.3)<% } %></td>
         <td>
   <%= r.giveAvg.toFixed(1) %>
   <% if (r.isBottomGiveAvg && (teamStats[r.teamName] && teamStats[r.teamName].gamesPlayed > 0)) { %>
-    (0.2)
+    (0.3)
   <% } %>
 </td>
-        <td><%= r.marginAvg.toFixed(1) %><% if (r.isTopMarginAvg) { %> (0.5)<% } %></td>
+        <td><%= r.marginAvg.toFixed(1) %><% if (r.isTopMarginAvg) { %> (0.8)<% } %></td>
         <td><%= (typeof r.sosAvg === 'number' ? r.sosAvg : 0).toFixed(2) %></td>
-        <td class="col-power-sor psor-col"><%= r.powerSorAvg.toFixed(3) %></td>
+        <td class="col-power-sor psor-col">
+  <button type="button" class="btn btn-link p-0 js-open-calc" data-kind="psor" data-team="<%= r.teamName %>"><%= r.powerSorAvg.toFixed(4) %>
+  </button>
+</td>
       </tr>
     <% }) %>
   </tbody>
 </table>
+
+<%
+  const __calcData = {};
+  (fbsTeams || []).forEach(team => {
+    const s = teamStats[team] || { gameStats: [] };
+    __calcData[team] = { games: [], wlqTotal: Number(s.wlqTotal || 0) };
+    (s.gameStats || []).forEach(gs => {
+      const gm = gs.game;
+      if (!gm || !gm.completed) return;
+      const homeIsTeam = (gm.homeTeam === team);
+      const opponent = homeIsTeam ? gm.awayTeam : gm.homeTeam;
+      const oppStat = teamStats[opponent] || {};
+      const oppQ = Number(oppStat.qualityTotal || 0);
+      const entry = {
+        week: Number(gm.week || 0),
+        opponent,
+        opponentQS: oppQ,
+        wlq: Number(gs.wlqScore || 0),
+        result: gs.won ? "W" : "L"
+      };
+      
+// Compute modal tooltip reason for SoR (same tiers/wording as table)
+(function(){
+  const homeIsTeam2 = (gm.homeTeam === team);
+  const trueAway2   = (gm.awayTeam === team) && (gm.neutralSite === false);
+  const teamPts2    = homeIsTeam2 ? Number(gm.homePoints || 0) : Number(gm.awayPoints || 0);
+  const oppPts2     = homeIsTeam2 ? Number(gm.awayPoints || 0) : Number(gm.homePoints || 0);
+  const margin2     = teamPts2 - oppPts2;
+  const bigWin2     = (margin2 > 13);
+  const closeLoss2  = (margin2 < 0) && ((-margin2) < 8);
+  const oppClass2   = homeIsTeam2 ? (gm.awayClassification || 'fbs') : (gm.homeClassification || 'fbs');
+  let reason2 = '';
+  if (String(oppClass2).toLowerCase() === 'fcs') {
+    reason2 = (gs.won ? 'Win vs FCS' : 'Loss vs FCS');
+  } else {
+    let p2 = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(oppQ) : 1;
+    let tier2 = 'Bottom 25% opponent';
+    if      (p2 <= 0.10) tier2 = 'Top 10% opponent';
+    else if (p2 <= 0.35) tier2 = 'Top 35% opponent';
+    else if (p2 <= 0.55) tier2 = 'Top 55% opponent';
+    else if (p2 <= 0.75) tier2 = 'Top 75% opponent';
+    if (gs.won) {
+      if (trueAway2 && bigWin2)      reason2 = 'Win on the road by >13 vs ' + tier2;
+      else if (!trueAway2 && bigWin2) reason2 = 'Win at home by >13 vs ' + tier2;
+      else if (trueAway2)            reason2 = 'Win on the road by ≤13 vs ' + tier2;
+      else                           reason2 = 'Win at home by ≤13 vs ' + tier2;
+    } else {
+      if (trueAway2 && closeLoss2)       reason2 = 'Loss on the road by <8 vs ' + tier2;
+      else if (!trueAway2 && closeLoss2) reason2 = 'Loss at home by <8 vs ' + tier2;
+      else if (trueAway2)                reason2 = 'Loss on the road by ≥8 vs ' + tier2;
+      else                               reason2 = 'Loss at home by ≥8 vs ' + tier2;
+    }
+  }
+  entry.reasonSoR = reason2;
+})();
+
+__calcData[team].games.push(entry);
+
+    });
+  });
+%>
+<script>
+  window.__TEAM_CALC_DATA = <%- JSON.stringify(__calcData, null, 2) %>;
+</script>
+
+
+<%
+  // Build meta array from rankings for safe JSON export (add champ bonus)
+  const __metaArr = (rankings || []).map(r => ({
+    team: r.teamName,
+    sorTotal: Number(r.wlqTotal || 0),
+    sorDenom: Number(r.sorDenomDebug || 0),
+    psorDenom: Number((r.pSorDenomDebug != null ? r.pSorDenomDebug : r.sorDenomDebug) || 0),
+    pfBonus: Number(r.appliedPfBonus || 0),
+    paBonus: Number(r.appliedPaBonus || 0),
+    smBonus: Number(r.appliedSmBonus || 0),
+    champBonus: Number(r.appliedChampBonus || 0),
+    totalBonus: Number((r.appliedPfBonus||0) + (r.appliedPaBonus||0) + (r.appliedSmBonus||0) + (r.appliedChampBonus||0)),
+    powerSorAvg: Number(r.powerSorAvg || 0),
+    sorAvg: Number(r.wlqAvg || 0),
+    wonChampionship: !!r.wonChampionship,
+    lostChampionship: !!r.lostChampionship
+  }));
+%>
+<script>
+  window.__TEAM_CALC_META = <%- JSON.stringify(__metaArr, null, 2) %>;
+</script>
+
 
 <hr />
 
@@ -603,9 +847,9 @@ rankings.forEach(r => {
       }
     });
     %>
-    <h3 class="team-schedule-title">
+    <h3 id="team-<%= team.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') %>" class="team-schedule-title">
   <%= team %> Schedule
-  (Record: <%= recordToString(stats.wins, stats.losses) %>)
+  (Record: <%= recordToString(stats.wins + (stats.wonChampionship?1:0), stats.losses + (stats.lostChampionship?1:0)) %><%= stats.wonChampionship ? '*' : '' %>)
   <span class="text-muted" style="font-weight: normal;">
     &nbsp;Conf:[
       <%= (conferenceRecords[team]?.confWins || 0) %>-
@@ -630,11 +874,14 @@ rankings.forEach(r => {
       </tr>
     </thead>
     <tbody>
-      <% stats.gameStats.forEach(({game, won, qualityChange, wlqScore}) => {
-          if (won) wins++; else losses++;
+      <% stats.gameStats.forEach(({game, won, qualityChange, wlqScore, isChampionship}) => {
+          // running record includes champs with W/L shown inline
+          if (!isChampionship) {
+            if (won) wins++; else losses++;
+            runningWlqTotal += wlqScore;
+            runningQualityTotal += qualityChange;
+          }
           const runningRecord = recordToString(wins, losses);
-          runningWlqTotal += wlqScore;
-          runningQualityTotal += qualityChange;
 
           const homeIsTeam = game.homeTeam === team;
           const awayIsTeam = game.awayTeam === team;
@@ -642,9 +889,9 @@ rankings.forEach(r => {
           const homeOppStats = teamStats[game.homeTeam] || { wins: 0, losses: 0, qualityTotal: 0 };
           const awayOppStats = teamStats[game.awayTeam] || { wins: 0, losses: 0, qualityTotal: 0 };
 
-          // scoring totals
-          let teamPoints = homeIsTeam ? game.homePoints : game.awayPoints;
-          let oppPoints  = homeIsTeam ? game.awayPoints : game.homePoints;
+          // scoring totals (exclude champ from averages used elsewhere, but display raw here)
+          let teamPoints = homeIsTeam ? Number(game.homePoints || 0) : Number(game.awayPoints || 0);
+          let oppPoints  = homeIsTeam ? Number(game.awayPoints || 0) : Number(game.homePoints || 0);
           teamPointsTotal += teamPoints;
           oppPointsTotal += oppPoints;
           gamesCount++;
@@ -654,14 +901,12 @@ rankings.forEach(r => {
           const margin  = teamAvg - oppAvg;
       %>
         <tr>
-          <td><%= game.week %></td>
+          <td><%= game.week %><% if (isChampionship) { %> (Champ)<% } %></td>
 
           <!-- Home Team -->
           <td>
-            <% if (homeIsTeam) { %>
-              <%= game.homeTeam %>
-            <% } else { %>
-              <%= game.homeTeam %>
+            <%= game.homeTeam %>
+            <% if (!homeIsTeam) { %>
               <% if (game.homeClassification === 'fbs') { %>
                 [<%= recordToString(homeOppStats.wins, homeOppStats.losses) %>] 
                 (<%= homeOppStats.qualityTotal.toFixed(2) %>)
@@ -671,10 +916,8 @@ rankings.forEach(r => {
 
           <!-- Away Team -->
           <td>
-            <% if (awayIsTeam) { %>
-              <%= game.awayTeam %>
-            <% } else { %>
-              <%= game.awayTeam %>
+            <%= game.awayTeam %>
+            <% if (!awayIsTeam) { %>
               <% if (game.awayClassification === 'fbs') { %>
                 [<%= recordToString(awayOppStats.wins, awayOppStats.losses) %>] 
                 (<%= awayOppStats.qualityTotal.toFixed(2) %>)
@@ -692,8 +935,158 @@ rankings.forEach(r => {
   <%= runningRecord %>
 </td>
 
-          <td><%= runningQualityTotal.toFixed(2) %> (<%= qualityChange.toFixed(2) %>)</td>
-          <td><%= runningWlqTotal.toFixed(2) %> (<%= wlqScore.toFixed(2) %>)</td>
+          
+<%
+  // --- Tooltip reasons for QS and SoR (per-game) ---
+  // Recompute context
+  const _homeIsTeam = (game.homeTeam === team);
+  const _trueAway   = (game.awayTeam === team) && (game.neutralSite === false);
+  const _teamPts    = _homeIsTeam ? Number(game.homePoints || 0) : Number(game.awayPoints || 0);
+  const _oppPts     = _homeIsTeam ? Number(game.awayPoints || 0) : Number(game.homePoints || 0);
+  const _margin     = _teamPts - _oppPts;
+  const _bigWin     = (_margin > 13);
+  const _closeLoss  = (_margin < 0) && ((-_margin) < 8);
+  const _oppName    = homeIsTeam ? game.awayTeam : game.homeTeam;
+  const _oppClass   = (homeIsTeam ? (game.awayClassification || 'fbs') : (game.homeClassification || 'fbs'));
+  const _oppConf    = (homeIsTeam ? (game.awayConference || '') : (game.homeConference || ''));
+  const _oppInPower = isPowerConf(_oppConf, _oppName);
+  const _oppNegQS   = !!(teamStats[_oppName] && Number(teamStats[_oppName].qualityTotal||0) < 0);
+
+  // QS reason
+  let qsReason = '';
+  if (_oppClass === 'fcs') {
+    qsReason = won ? 'Win vs FCS' : 'Loss vs FCS';
+  } else if (_oppInPower) {
+    if (won) {
+      if (_oppNegQS) qsReason = 'Win vs Power opponent with negative QS';
+      else if (_trueAway && _bigWin) qsReason = 'Win on the road by >13 vs Power opponent';
+      else if (!_trueAway && _bigWin) qsReason = 'Win at home by >13 vs Power opponent';
+      else if (_trueAway) qsReason = 'Win on the road by ≤13 vs Power opponent';
+      else qsReason = 'Win at home by ≤13 vs Power opponent';
+    } else {
+      if (_oppNegQS) qsReason = 'Loss vs Power opponent with negative QS';
+      else if (_trueAway && _closeLoss) qsReason = 'Loss on the road by <8 vs Power opponent';
+      else if (!_trueAway && _closeLoss) qsReason = 'Loss at home by <8 vs Power opponent';
+      else if (_trueAway) qsReason = 'Loss on the road by ≥8 vs Power opponent';
+      else qsReason = 'Loss at home by ≥8 vs Power opponent';
+    }
+  } else { // non-power FBS
+    if (won) {
+      if (_oppNegQS) qsReason = 'Win vs FBS opponent with negative QS';
+      else if (_trueAway && _bigWin) qsReason = 'Win on the road by >13 vs FBS opponent';
+      else if (!_trueAway && _bigWin) qsReason = 'Win at home by >13 vs FBS opponent';
+      else if (_trueAway) qsReason = 'Win on the road by ≤13 vs FBS opponent';
+      else qsReason = 'Win at home by ≤13 vs FBS opponent';
+    } else {
+      if (_oppNegQS) qsReason = 'Loss vs FBS opponent with negative QS';
+      else if (_trueAway && _closeLoss) qsReason = 'Loss on the road by <8 vs FBS opponent';
+      else if (!_trueAway && _closeLoss) qsReason = 'Loss at home by <8 vs FBS opponent';
+      else if (_trueAway) qsReason = 'Loss on the road by ≥8 vs FBS opponent';
+      else qsReason = 'Loss at home by ≥8 vs FBS opponent';
+    }
+  }
+
+  // SoR reason (tier-based). Use previously defined helpers for percentile on opponent QS.
+  let sorReason = '';
+  if (_oppClass === 'fcs') {
+    sorReason = won ? 'Win vs FCS' : 'Loss vs FCS';
+  } else {
+    const _oppQS = Number((teamStats[_oppName] && teamStats[_oppName].qualityTotal) || 0);
+    let _p = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(_oppQS) : 1;
+    let tier = 'Bottom 25% opponent';
+    if (_p <= 0.10) tier = 'Top 10% opponent';
+    else if (_p <= 0.35) tier = 'Top 35% opponent';
+    else if (_p <= 0.55) tier = 'Top 55% opponent';
+    else if (_p <= 0.75) tier = 'Top 75% opponent';
+
+    let loc = _trueAway ? 'on the road' : 'at home or neutral';
+    sorReason = (won ? 'Win ' : 'Loss ') + loc + ' vs ' + tier;
+  }
+%>
+
+<%
+  // Build per-game QS & SoR tooltip reasons (table cells)
+  const _homeIsTeam_tb = (game.homeTeam === team);
+  const _trueAway_tb   = (game.awayTeam === team) && (game.neutralSite === false);
+  const _tPts_tb       = _homeIsTeam_tb ? Number(game.homePoints || 0) : Number(game.awayPoints || 0);
+  const _oPts_tb       = _homeIsTeam_tb ? Number(game.awayPoints || 0) : Number(game.homePoints || 0);
+  const _marg_tb       = _tPts_tb - _oPts_tb;
+  const _bigWin_tb     = (_marg_tb > 13);
+  const _closeLoss_tb  = (_marg_tb < 0) && ((-_marg_tb) < 8);
+  const _oppName_tb    = _homeIsTeam_tb ? game.awayTeam : game.homeTeam;
+  const _oppClass_tb   = _homeIsTeam_tb ? (game.awayClassification || 'fbs') : (game.homeClassification || 'fbs');
+  const _oppConf_tb    = _homeIsTeam_tb ? (game.awayConference || '') : (game.homeConference || '');
+  const _oppInPower_tb = isPowerConf(_oppConf_tb, _oppName_tb);
+  const _oppNegQS_tb   = !!(teamStats[_oppName_tb] && Number(teamStats[_oppName_tb].qualityTotal || 0) < 0);
+
+  let qsReason_tb = '';
+  if (_oppClass_tb === 'fcs') {
+    qsReason_tb = won ? 'Win vs FCS' : 'Loss vs FCS';
+  } else if (_oppInPower_tb) {
+    if (won) {
+      if (_oppNegQS_tb) qsReason_tb = 'Win vs Power opponent with negative QS';
+      else if (_trueAway_tb && _bigWin_tb) qsReason_tb = 'Win on the road by >13 vs Power opponent';
+      else if (!_trueAway_tb && _bigWin_tb) qsReason_tb = 'Win at home by >13 vs Power opponent';
+      else if (_trueAway_tb) qsReason_tb = 'Win on the road by ≤13 vs Power opponent';
+      else qsReason_tb = 'Win at home by ≤13 vs Power opponent';
+    } else {
+      if (_oppNegQS_tb) qsReason_tb = 'Loss vs Power opponent with negative QS';
+      else if (_trueAway_tb && _closeLoss_tb) qsReason_tb = 'Loss on the road by <8 vs Power opponent';
+      else if (!_trueAway_tb && _closeLoss_tb) qsReason_tb = 'Loss at home by <8 vs Power opponent';
+      else if (_trueAway_tb) qsReason_tb = 'Loss on the road by ≥8 vs Power opponent';
+      else qsReason_tb = 'Loss at home by ≥8 vs Power opponent';
+    }
+  } else {
+    if (won) {
+      if (_oppNegQS_tb) qsReason_tb = 'Win vs FBS opponent with negative QS';
+      else if (_trueAway_tb && _bigWin_tb) qsReason_tb = 'Win on the road by >13 vs FBS opponent';
+      else if (!_trueAway_tb && _bigWin_tb) qsReason_tb = 'Win at home by >13 vs FBS opponent';
+      else if (_trueAway_tb) qsReason_tb = 'Win on the road by ≤13 vs FBS opponent';
+      else qsReason_tb = 'Win at home by ≤13 vs FBS opponent';
+    } else {
+      if (_oppNegQS_tb) qsReason_tb = 'Loss vs FBS opponent with negative QS';
+      else if (_trueAway_tb && _closeLoss_tb) qsReason_tb = 'Loss on the road by <8 vs FBS opponent';
+      else if (!_trueAway_tb && _closeLoss_tb) qsReason_tb = 'Loss at home by <8 vs FBS opponent';
+      else if (_trueAway_tb) qsReason_tb = 'Loss on the road by ≥8 vs FBS opponent';
+      else qsReason_tb = 'Loss at home by ≥8 vs FBS opponent';
+    }
+  }
+
+  let sorReason_tb = '';
+  if (_oppClass_tb === 'fcs') {
+    sorReason_tb = won ? 'Win vs FCS' : 'Loss vs FCS';
+  } else {
+    const _oppQSVal_tb = Number((teamStats[_oppName_tb] && teamStats[_oppName_tb].qualityTotal) || 0);
+    let _p_tb = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(_oppQSVal_tb) : 1;
+    let tier_tb = 'Bottom 25% opponent';
+    if      (_p_tb <= 0.10) tier_tb = 'Top 10% opponent';
+    else if (_p_tb <= 0.35) tier_tb = 'Top 35% opponent';
+    else if (_p_tb <= 0.55) tier_tb = 'Top 55% opponent';
+    else if (_p_tb <= 0.75) tier_tb = 'Top 75% opponent';
+
+    if (won) {
+      if (_trueAway_tb && _bigWin_tb)       sorReason_tb = 'Win on the road by >13 vs ' + tier_tb;
+      else if (!_trueAway_tb && _bigWin_tb) sorReason_tb = 'Win at home by >13 vs ' + tier_tb;
+      else if (_trueAway_tb)             sorReason_tb = 'Win on the road by ≤13 vs ' + tier_tb;
+      else                            sorReason_tb = 'Win at home by ≤13 vs ' + tier_tb;
+    } else {
+      if (_trueAway_tb && _closeLoss_tb)       sorReason_tb = 'Loss on the road by <8 vs ' + tier_tb;
+      else if (!_trueAway_tb && _closeLoss_tb) sorReason_tb = 'Loss at home by <8 vs ' + tier_tb;
+      else if (_trueAway_tb)                sorReason_tb = 'Loss on the road by ≥8 vs ' + tier_tb;
+      else                               sorReason_tb = 'Loss at home by ≥8 vs ' + tier_tb;
+    }
+  }
+%>
+<td>
+  <%= runningQualityTotal.toFixed(2) %>
+  (<span data-bs-toggle="tooltip" data-bs-placement="top" title="<%= qsReason_tb %>"><%= (!isChampionship ? qualityChange.toFixed(2) : '0.00') %></span>)
+</td>
+<td>
+  <%= runningWlqTotal.toFixed(2) %>
+  (<span data-bs-toggle="tooltip" data-bs-placement="top" title="<%= sorReason_tb %>"><%= (!isChampionship ? wlqScore.toFixed(2) : '0.00') %></span>)
+</td>
+
+
           
         <% 
           const opponentName = homeIsTeam ? game.awayTeam : game.homeTeam;
@@ -959,7 +1352,163 @@ document.addEventListener("DOMContentLoaded", () => {
   </div>
 </div>
 
+<!-- Back to top -->
+<button id="backToTopBtn" class="btn btn-primary rounded-circle" style="position:fixed;bottom:20px;right:20px;z-index:1050;width:48px;height:48px;box-shadow:0 4px 12px rgba(0,0,0,.2);" aria-label="Back to top">↑</button>
 
+<!-- Calculation Detail Modal -->
+<div class="modal fade" id="calcModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="calcModalTitle">Calculation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="calcModalBody"></div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+(function(){
+  function fmt(x, d){ return (Number(x)||0).toFixed(d); }
+  function getMeta(team){
+    const arr = window.__TEAM_CALC_META || [];
+    for (let i=0; i<arr.length; i++){
+      if (arr[i].team === team) return arr[i];
+    }
+    return null;
+  }
+  function buildGameRows(team){
+    const bundle = (window.__TEAM_CALC_DATA && window.__TEAM_CALC_DATA[team]) || { games: [] };
+    const games = (bundle.games || []).slice().sort((a,b)=>a.week-b.week);
+    if (!games.length) return "<p>No completed games yet.</p>";
+    let cum = 0;
+    let html = '<div class="table-responsive"><table class="table table-sm table-striped align-middle">';
+    html += '<thead><tr><th>Week</th><th>Opponent</th><th>Opp QS</th><th>SoR from Game (WLQ)</th><th>Result</th></tr></thead><tbody>';
+    games.forEach(g => {
+      cum += (Number(g.wlq)||0);
+      html += '<tr>'
+        + '<td>'+g.week+'</td>'
+        + '<td>'+g.opponent+'</td>'
+        + '<td>'+fmt(g.opponentQS,3)+'</td>'
+        + '<td><span data-bs-toggle="tooltip" data-bs-placement="top" title="'+(g.reasonSoR||'')+'">'+fmt(g.wlq,3)+'</span></td>'
+        + '<td>'+g.result+'</td>'
+        + '</tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<p class="mb-1"><strong>Cumulative SoR (Σ WLQ):</strong> '+fmt(cum,3)+'</p>';
+    return html;
+  }
+  function buildSoRSection(team){
+    const m = getMeta(team) || {};
+    const gamesHtml = buildGameRows(team);
+    const lines = `
+      <h6 class="mb-2">SoR Average — Formula</h6>
+      <div class="table-responsive mb-2">
+        <table class="table table-bordered table-sm align-middle">
+          <thead>
+            <tr><th>Variable</th><th>Definition</th><th>Value</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SoR Total</td><td>Σ WLQ (per-game strength-of-record)</td><td>${fmt(m.sorTotal,3)}</td></tr>
+            <tr><td>SoR Avg</td><td>SoR Total ÷ Games Played</td><td><strong>${fmt(m.sorAvg,3)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+    return gamesHtml + lines;
+  }
+  function buildPSoRSection(team){
+    const m = getMeta(team) || {};
+    const bonusBreak = `PF: ${fmt(m.pfBonus,3)} | PA: ${fmt(m.paBonus,3)} | SM: ${fmt(m.smBonus,3)} | Championship: ${fmt(m.champBonus,3)} | Total: ${fmt(m.totalBonus,3)}`;
+    const lines = `
+      <h6 class="mb-2">Power SoR Average — Formula</h6>
+      <div class="table-responsive mb-2">
+        <table class="table table-bordered table-sm align-middle">
+          <thead>
+            <tr><th>Variable</th><th>Definition</th><th>Value</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SoR Total</td><td>Σ WLQ</td><td>${fmt(m.sorTotal,3)}</td></tr>
+            <tr><td>Bonuses (pre-avg)</td><td>PF (0.3×week/12) + PA (0.3×week/12) + SM (0.8×week/12) + <strong>Championship (+0.30 win / -0.10 loss)</strong></td><td>${bonusBreak}</td></tr>
+            <tr><td>PSoR Avg</td><td>(SoR Total + Bonuses) ÷ Games Played</td><td><strong>${fmt(m.powerSorAvg,3)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+    return lines;
+  }
+  function openCalcModal(kind, team){
+    const modalEl = document.getElementById('calcModal');
+    const titleEl = document.getElementById('calcModalTitle');
+    const bodyEl  = document.getElementById('calcModalBody');
+    if (!modalEl || !titleEl || !bodyEl) return;
+    titleEl.textContent = (kind === 'psor' ? 'PSoR Avg — ' : 'SoR Avg — ') + team;
+    let html = '';
+    if (kind === 'psor') html = buildSoRSection(team) + buildPSoRSection(team);
+    else html = buildSoRSection(team);
+    bodyEl.innerHTML = html;
+    try {
+      const tts = [].slice.call(document.querySelectorAll('#calcModal [data-bs-toggle=\"tooltip\"]'));
+      tts.forEach(el => { new bootstrap.Tooltip(el, { container: '#calcModal' }); });
+    } catch(e) { console.warn('Modal tooltip init error', e); }
+    let inst = bootstrap.Modal.getInstance(modalEl);
+    if (!inst) inst = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
+    inst.show();
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.js-open-calc[data-team]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const team = btn.getAttribute('data-team');
+        const kind = btn.getAttribute('data-kind'); // "sor" or "psor"
+        if (!team || !kind) return;
+        openCalcModal(kind, team);
+      });
+    });
+    const backBtn = document.getElementById('backToTopBtn');
+    if (backBtn) backBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  });
+})();
+</script>
+
+
+<style>
+  /* Ensure anchored headers land below the fixed navbar by ~100px */
+  .team-schedule-title { scroll-margin-top: calc(var(--nav-offset, 0px) + 100px); }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  function setNavOffset(){
+    var nav = document.querySelector('.navbar.fixed-top');
+    var h = (nav && nav.offsetHeight) ? nav.offsetHeight : 0;
+    document.documentElement.style.setProperty('--nav-offset', h + 'px');
+  }
+  setNavOffset();
+  window.addEventListener('resize', setNavOffset);
+
+  document.body.addEventListener('click', function(e){
+    var a = e.target.closest('a.js-team-link[href^="#team-"]');
+    if (!a) return;
+    var id = (a.getAttribute('href') || '').slice(1);
+    if (!id) return;
+    e.preventDefault();
+    var el = document.getElementById(id);
+    if (el && el.scrollIntoView) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      history.replaceState(null, '', '#' + id);
+    }
+  });
+
+  if (location.hash && location.hash.startsWith('#team-')) {
+    var el = document.getElementById(location.hash.slice(1));
+    if (el && el.scrollIntoView) {
+      // use a tiny delay to allow layout stabilize
+      setTimeout(function(){ el.scrollIntoView({ behavior: 'instant', block: 'start' }); }, 0);
+    }
+  }
+});
+</script>
 
 </body>
 </html>
