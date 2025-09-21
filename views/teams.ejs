@@ -15,6 +15,21 @@
     .sor-col { background: #fff7a8; }
     .psor-col { background: #add8e6; }
   </style>
+  <style>
+    .team-logo {
+      height: 20px;
+      width: auto;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    .team-logo--header {
+      height: 28px;
+      width: auto;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+  </style>
+  
 
   <style>
     /* Mobile-only message hidden on desktop */
@@ -701,7 +716,15 @@ rankings.forEach(r => {
     %>
       <tr>
         <td><%= rank %></td>
-        <td><a class="text-decoration-none js-team-link" href="#team-<%= r.teamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') %>"><%= r.teamName %></a></td>
+        <td>
+  <% if (teamLogos && teamLogos[r.teamName]) { %>
+    <img class="team-logo" src="<%= teamLogos[r.teamName] %>" alt="<%= r.teamName %> logo" />
+  <% } %>
+  <a class="text-decoration-none js-team-link"
+     href="#team-<%= r.teamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') %>">
+     <%= r.teamName %>
+  </a>
+</td>
         <td
   data-bs-toggle="tooltip"
   data-bs-placement="top"
@@ -848,6 +871,9 @@ __calcData[team].games.push(entry);
     });
     %>
     <h3 id="team-<%= team.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') %>" class="team-schedule-title">
+  <% if (teamLogos && teamLogos[team]) { %>
+    <img class="team-logo--header" src="<%= teamLogos[team] %>" alt="<%= team %> logo" />
+  <% } %>
   <%= team %> Schedule
   (Record: <%= recordToString(stats.wins + (stats.wonChampionship?1:0), stats.losses + (stats.lostChampionship?1:0)) %><%= stats.wonChampionship ? '*' : '' %>)
   <span class="text-muted" style="font-weight: normal;">
@@ -857,6 +883,7 @@ __calcData[team].games.push(entry);
     ]
   </span>
 </h3>
+
   <table border="1" cellspacing="0" cellpadding="5">
     <thead>
       <tr>
