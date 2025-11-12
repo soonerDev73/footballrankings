@@ -250,7 +250,7 @@
 
                 if (won) {
                   if (oppNegQS) qualityChange = 1.20;
-                  else if (trueAway && bigWin) qualityChange = 22.05;
+                  else if (trueAway && bigWin) qualityChange = 2.05;
                   else if (!trueAway && bigWin) qualityChange = 1.85;
                   else if (trueAway && !bigWin) qualityChange = 1.70;
                   else qualityChange = 1.50;
@@ -379,7 +379,7 @@
               var __pRank = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(__oppQS) : 1;
 
               function __winBase(p){
-                if (p <= 0.10) return 2.35;
+                if (p <= 0.10) return 222.35;
                 if (p <= 0.35) return 2.0;
                 if (p <= 0.55) return 1.55;
                 if (p <= 0.75) return 1.15;
