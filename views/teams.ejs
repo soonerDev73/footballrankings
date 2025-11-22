@@ -635,7 +635,7 @@ rankings.forEach(r => {
   const giveBonusEligible = (gp > 0) && r.isBottomGiveAvg; // unchanged eligibility rule
 
   // Base bonuses, scaled by weekFrac (capped at 12/12)
-  const pfBase = 0.4, paBase = 0.4, smBase = 0.7;
+  const pfBase = 0.3, paBase = 0.3, smBase = 0.8;
   const pfAmt = r.isTopScoringAvg ? (pfBase * weekFrac) : 0;
   const paAmt = giveBonusEligible ? (paBase * weekFrac) : 0;
   const smAmt = r.isTopMarginAvg ? (smBase * weekFrac) : 0;
@@ -854,14 +854,14 @@ rankings.forEach(r => {
   <button type="button" class="btn btn-link p-0 js-open-calc" data-kind="sor" data-team="<%= r.teamName %>"><%= r.wlqAvg.toFixed(3) %>
   </button>
 </td>
-        <td><%= r.scoringAvg.toFixed(1) %><% if (r.isTopScoringAvg) { %> (0.4)<% } %></td>
+        <td><%= r.scoringAvg.toFixed(1) %><% if (r.isTopScoringAvg) { %> (0.3)<% } %></td>
         <td>
   <%= r.giveAvg.toFixed(1) %>
   <% if (r.isBottomGiveAvg && (teamStats[r.teamName] && teamStats[r.teamName].gamesPlayed > 0)) { %>
-    (0.4)
+    (0.3)
   <% } %>
 </td>
-        <td><%= r.marginAvg.toFixed(1) %><% if (r.isTopMarginAvg) { %> (0.7)<% } %></td>
+        <td><%= r.marginAvg.toFixed(1) %><% if (r.isTopMarginAvg) { %> (0.8)<% } %></td>
         <td><%= (typeof r.sosAvg === 'number' ? r.sosAvg : 0).toFixed(2) %></td>
         <td class="col-power-sor psor-col">
   <button type="button" class="btn btn-link p-0 js-open-calc" data-kind="psor" data-team="<%= r.teamName %>"><%= r.powerSorAvg.toFixed(4) %>
