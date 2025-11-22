@@ -15,6 +15,17 @@
     .sor-col { background: #fff7a8; }
     .psor-col { background: #add8e6; }
   </style>
+
+<style>
+  /* Ranking rows for teams with 4+ losses */
+  .losses-4plus { background: rgba(220, 53, 69, 0.12) !important; }
+
+  /* Conference standings polish */
+  .conf-standings .team-logo { width: 18px; height: 18px; object-fit: contain; vertical-align: -3px; margin-right: 6px; }
+  .conf-standings h5 { margin-top: 1.25rem; }
+  .conf-standings .table thead th { white-space: nowrap; }
+</style>
+
   <style>
     .team-logo {
       height: 20px;
@@ -131,6 +142,12 @@
   <li class="nav-item">
     <a class="nav-link js-open-info" href="#" data-info="glossary">Glossary</a>
   </li>
+  <div class="col-3 ps-lg-1">
+  <a class="btn btn-sm btn-outline-secondary w-100" href="#conf-standings-section">
+    Conference Standing
+  </a>
+</div>
+
 </ul>
 
 
@@ -171,24 +188,119 @@
           });
           let fbsTeams = Array.from(fbsTeamsSet).sort();
 
-          // Team stats container
-          let teamStats = {};
-          let conferenceRecords = {};
-          let teamConference = {};   
+ // Team stats containers
+let teamStatsSeed = {};   // used only to get final opponent QS for oppNegQS checks
+let teamStats = {};       // the main stats object used everywhere else
+let conferenceRecords = {};
+let teamConference = {};   
 
-          fbsTeams.forEach(team => {
-            teamStats[team] = {
-              wins: 0,
-              losses: 0,
-              qualityTotal: 0,
-              wlqTotal: 0,
-              gamesPlayed: 0,
-              gameStats: [],
-              hasChampionship: false,
-              wonChampionship: false,
-              lostChampionship: false
-            };
-          });
+fbsTeams.forEach(team => {
+  // Seed object: we only care about qualityTotal here
+  teamStatsSeed[team] = {
+    qualityTotal: 0
+  };
+
+  // Main object: same shape you had before
+  teamStats[team] = {
+    wins: 0,
+    losses: 0,
+    qualityTotal: 0,
+    wlqTotal: 0,
+    gamesPlayed: 0,
+    gameStats: [],
+    hasChampionship: false,
+    wonChampionship: false,
+    lostChampionship: false
+  };
+});
+
+//
+// ---------- PASS 0: seed opponent QS for oppNegQS decisions ----------
+//   This pass only builds teamStatsSeed[team].qualityTotal so that all
+//   oppNegQS checks use season-long QS instead of week-by-week QS.
+//
+games.forEach(game => {
+  if (!game.completed) return;
+
+  ['home', 'away'].forEach(side => {
+    const team = game[side + 'Team'];
+    const teamClass = game[side + 'Classification'];
+    if (teamClass !== 'fbs') return;
+
+    const oppSide = (side === 'home') ? 'away' : 'home';
+    const opponent = game[oppSide + 'Team'];
+    const opponentClass = game[oppSide + 'Classification'];
+    const opponentConf = game[oppSide + 'Conference'];
+
+    const teamPoints = Number(game[side + 'Points'] || 0);
+    const oppPoints  = Number(game[oppSide + 'Points'] || 0);
+    const won = teamPoints > oppPoints;
+
+    const isChampionship = String(game.notes || game.gameName || '').toLowerCase().includes('championship');
+    // Keep same rule: championship games do not affect QS totals
+    if (isChampionship) return;
+
+    const opponentInPower = isPowerConf(opponentConf, opponent);
+
+    let qualityChange = 0;
+
+    if (opponentClass === 'fcs') {
+      qualityChange = won ? 0.5 : -2.25;
+    } else if (opponentInPower) {
+      const trueAway = (game.awayTeam === team) && (game.neutralSite === false);
+      const margin   = teamPoints - oppPoints;
+      const bigWin   = margin > 13;
+
+      const oppName  = opponent;
+      const oppNegQS = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTotal < 0);
+
+      if (won) {
+        if (oppNegQS) qualityChange = 1.20;
+        else if (trueAway && bigWin) qualityChange = 2.05;
+        else if (!trueAway && bigWin) qualityChange = 1.85;
+        else if (trueAway && !bigWin) qualityChange = 1.70;
+        else qualityChange = 1.50;
+      } else {
+        const closeLoss = (margin < 0) && ((-margin) < 8);
+        if (oppNegQS) qualityChange = -1.10;
+        else if (trueAway && closeLoss) qualityChange = -0.20;
+        else if (!trueAway && closeLoss) qualityChange = -0.40;
+        else if (trueAway && !closeLoss) qualityChange = -0.70;
+        else qualityChange = -0.85;
+      }
+    } else if (opponentClass === 'fbs') {
+      // Non-power FBS
+      const trueAway = (game.awayTeam === team) && (game.neutralSite === false);
+      const margin   = teamPoints - oppPoints;
+      const bigWin   = margin > 13;
+
+      const oppName  = opponent;
+      const oppNegQS = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTotal < 0);
+
+      if (won) {
+        if (oppNegQS) qualityChange = 1.00;
+        else if (trueAway && bigWin) qualityChange = 1.60;
+        else if (!trueAway && bigWin) qualityChange = 1.40;
+        else if (trueAway && !bigWin) qualityChange = 1.25;
+        else qualityChange = 1.10;
+      } else {
+        const closeLoss = (margin < 0) && ((-margin) < 8);
+        if (oppNegQS) qualityChange = -1.30;
+        else if (trueAway && closeLoss) qualityChange = -0.3;
+        else if (!trueAway && closeLoss) qualityChange = -0.55;
+        else if (trueAway && !closeLoss) qualityChange = -0.85;
+        else qualityChange = -1.15;
+      }
+    }
+
+    // Accumulate only into seed QS
+    if (!teamStatsSeed[team]) {
+      teamStatsSeed[team] = { qualityTotal: 0 };
+    }
+    teamStatsSeed[team].qualityTotal += qualityChange;
+  });
+});
+
 
           //
           // ---------- PASS 1: build wins/losses and quality totals ----------
@@ -238,7 +350,7 @@
 
               let qualityChange = 0;
               if (opponentClass === 'fcs') {
-                qualityChange = won ? 0.25 : -2.25;
+                qualityChange = won ? 0.5 : -2.25;
               } else if (opponentInPower) {
                 // QS override per your rules
                 const homeIsTeam = (game[side + 'Team'] === game.homeTeam);
@@ -246,7 +358,8 @@
                 const margin     = homeIsTeam ? (teamPoints - oppPoints) : (teamPoints - oppPoints);
                 const bigWin     = margin > 13;
                 const oppName    = opponent;
-                const oppNegQS   = (teamStats[oppName] && teamStats[oppName].qualityTotal < 0);
+const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTotal < 0);
+
 
                 if (won) {
                   if (oppNegQS) qualityChange = 1.20;
@@ -269,7 +382,8 @@
                 const margin     = homeIsTeam ? (teamPoints - oppPoints) : (teamPoints - oppPoints);
                 const bigWin     = margin > 13;
                 const oppName    = opponent;
-                const oppNegQS   = (teamStats[oppName] && teamStats[oppName].qualityTotal < 0);
+const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTotal < 0);
+
 
                 if (won) {
                   if (oppNegQS) qualityChange = 1.00;
@@ -380,13 +494,15 @@
 
               function __winBase(p){
                 if (p <= 0.10) return 2.35;
+                //if (p <= 0.20) return 2.0
                 if (p <= 0.35) return 2.0;
                 if (p <= 0.55) return 1.55;
                 if (p <= 0.75) return 1.15;
-                return 1.0; // bottom 10%
+                return 1.00; // bottom 10%
               }
               function __lossBase(p){
                 if (p <= 0.10) return -0.7;
+                //if (p <= 0.20) return 0.7;
                 if (p <= 0.35) return -0.85;
                 if (p <= 0.55) return -1.05;
                 if (p <= 0.75) return -1.3;
@@ -394,7 +510,7 @@
               }
 
               if (__oppClass === 'fcs') {
-                wlqScore = won ? 0.25 : -2.25;
+                wlqScore = won ? 0.5 : -2.25;
               } else { // fbs
                 var __base = won ? __winBase(__pRank) : __lossBase(__pRank);
                 var __isBottom10 = (__pRank > 0.90);
@@ -519,7 +635,7 @@ rankings.forEach(r => {
   const giveBonusEligible = (gp > 0) && r.isBottomGiveAvg; // unchanged eligibility rule
 
   // Base bonuses, scaled by weekFrac (capped at 12/12)
-  const pfBase = 0.3, paBase = 0.3, smBase = 0.8;
+  const pfBase = 0.4, paBase = 0.4, smBase = 0.7;
   const pfAmt = r.isTopScoringAvg ? (pfBase * weekFrac) : 0;
   const paAmt = giveBonusEligible ? (paBase * weekFrac) : 0;
   const smAmt = r.isTopMarginAvg ? (smBase * weekFrac) : 0;
@@ -564,6 +680,7 @@ rankings.forEach(r => {
       Glossary
     </button>
   </div>
+  
 </div>
 
 <!-- About Rankings collapsible -->
@@ -737,19 +854,21 @@ rankings.forEach(r => {
   <button type="button" class="btn btn-link p-0 js-open-calc" data-kind="sor" data-team="<%= r.teamName %>"><%= r.wlqAvg.toFixed(3) %>
   </button>
 </td>
-        <td><%= r.scoringAvg.toFixed(1) %><% if (r.isTopScoringAvg) { %> (0.3)<% } %></td>
+        <td><%= r.scoringAvg.toFixed(1) %><% if (r.isTopScoringAvg) { %> (0.4)<% } %></td>
         <td>
   <%= r.giveAvg.toFixed(1) %>
   <% if (r.isBottomGiveAvg && (teamStats[r.teamName] && teamStats[r.teamName].gamesPlayed > 0)) { %>
-    (0.3)
+    (0.4)
   <% } %>
 </td>
-        <td><%= r.marginAvg.toFixed(1) %><% if (r.isTopMarginAvg) { %> (0.8)<% } %></td>
+        <td><%= r.marginAvg.toFixed(1) %><% if (r.isTopMarginAvg) { %> (0.7)<% } %></td>
         <td><%= (typeof r.sosAvg === 'number' ? r.sosAvg : 0).toFixed(2) %></td>
         <td class="col-power-sor psor-col">
   <button type="button" class="btn btn-link p-0 js-open-calc" data-kind="psor" data-team="<%= r.teamName %>"><%= r.powerSorAvg.toFixed(4) %>
   </button>
 </td>
+
+
       </tr>
     <% }) %>
   </tbody>
@@ -792,6 +911,7 @@ rankings.forEach(r => {
     let p2 = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(oppQ) : 1;
     let tier2 = 'Bottom 25% opponent';
     if      (p2 <= 0.10) tier2 = 'Top 10% opponent';
+    else if (p2 <= 0.20) tier2 = 'Top 20% opponent';
     else if (p2 <= 0.35) tier2 = 'Top 35% opponent';
     else if (p2 <= 0.55) tier2 = 'Top 55% opponent';
     else if (p2 <= 0.75) tier2 = 'Top 75% opponent';
@@ -1022,6 +1142,7 @@ __calcData[team].games.push(entry);
     let _p = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(_oppQS) : 1;
     let tier = 'Bottom 25% opponent';
     if (_p <= 0.10) tier = 'Top 10% opponent';
+    else if (_p <= 0.20) tier = 'Top 20% opponent';
     else if (_p <= 0.35) tier = 'Top 35% opponent';
     else if (_p <= 0.55) tier = 'Top 55% opponent';
     else if (_p <= 0.75) tier = 'Top 75% opponent';
@@ -1087,6 +1208,7 @@ __calcData[team].games.push(entry);
     let _p_tb = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(_oppQSVal_tb) : 1;
     let tier_tb = 'Bottom 25% opponent';
     if      (_p_tb <= 0.10) tier_tb = 'Top 10% opponent';
+    else if (_p_tb <= 0.20) tier_tb = 'Top 20% opponent';
     else if (_p_tb <= 0.35) tier_tb = 'Top 35% opponent';
     else if (_p_tb <= 0.55) tier_tb = 'Top 55% opponent';
     else if (_p_tb <= 0.75) tier_tb = 'Top 75% opponent';
@@ -1536,6 +1658,152 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // Try common selectors. If your ranking table has a specific id/class, add it here:
+  const table = document.querySelector('#rankingTable, table[data-ranking-table], .rankings-table');
+  if (!table) return;
+
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    let losses = null;
+
+    // Preferred: data-losses attribute on a cell
+    const lossCell = tr.querySelector('[data-losses]');
+    if (lossCell) {
+      losses = Number(lossCell.getAttribute('data-losses'));
+    } else {
+      // Fallback: parse a record cell like "8-4"
+      const recordCell = tr.querySelector('[data-record]') ||
+                         Array.from(tr.cells).find(td => /\b\d+\s*-\s*\d+\b/.test(td.textContent));
+      if (recordCell) {
+        const m = recordCell.textContent.match(/(\d+)\s*-\s*(\d+)/);
+        if (m) losses = Number(m[2]);
+      }
+    }
+
+    if (typeof losses === 'number' && losses >= 4) {
+      tr.classList.add('losses-4plus');
+    }
+  });
+});
+</script>
+<hr class="mt-5" />
+<div class="container conf-standings mb-5" id="conf-standings-section">
+  <h3 class="mb-3">Conference Standings</h3>
+  <div id="conf-standings"></div>
+  <p class="text-muted small mt-2">
+    Standings are derived from completed games on this page. Conference records include only games where both teams share the same conference.
+  </p>
+</div>
+<script>
+(function(){
+  const GAMES = Array.isArray(window.games) ? window.games : [];
+  if (!GAMES.length) return;
+
+  const LOGOS = window.__TEAM_LOGOS || {};
+  const TEAM_TO_CONF = window.__TEAM_TO_CONF || {};
+
+  function inferConference(team, gm, side) {
+    const cand = gm[side + 'Conference'] || gm[side + 'Conf'] || gm[side + 'League'] || null;
+    return cand;
+  }
+
+  // standings[conf][team] = { confW, confL, ovW, ovL, pf, pa }
+  const standings = {};
+  const ensure = (conf, team) => {
+    if (!standings[conf]) standings[conf] = {};
+    if (!standings[conf][team]) standings[conf][team] = { team, confW:0, confL:0, ovW:0, ovL:0, pf:0, pa:0 };
+    return standings[conf][team];
+  };
+
+  GAMES.filter(g => g && g.completed).forEach(gm => {
+    const tH = gm.homeTeam, tA = gm.awayTeam;
+    if (!tH || !tA) return;
+
+    const cH = TEAM_TO_CONF[tH] || inferConference(tH, gm, 'home') || 'Independent';
+    const cA = TEAM_TO_CONF[tA] || inferConference(tA, gm, 'away') || 'Independent';
+
+    const pH = Number(gm.homePoints || 0);
+    const pA = Number(gm.awayPoints || 0);
+
+    // Overall PF/PA
+    const rH = ensure(cH, tH); rH.pf += pH; rH.pa += pA;
+    const rA = ensure(cA, tA); rA.pf += pA; rA.pa += pH;
+
+    // Overall W-L
+    if (pH > pA) { rH.ovW++; rA.ovL++; }
+    else if (pA > pH) { rA.ovW++; rH.ovL++; }
+
+    // Conference W-L only if both teams are in the same conference
+    if (cH === cA) {
+      if (pH > pA) { rH.confW++; rA.confL++; }
+      else if (pA > pH) { rA.confW++; rH.confL++; }
+    }
+  });
+
+  function pct(w,l){ const t=w+l; return t ? (w/t) : 0; }
+
+  // Sort and render
+  const container = document.getElementById('conf-standings');
+  if (!container) return;
+
+  const conferences = Object.keys(standings).sort((a,b)=>a.localeCompare(b));
+  let html = '';
+
+  conferences.forEach(conf => {
+    const rows = Object.values(standings[conf]);
+
+    rows.sort((a,b) => {
+      const ap = pct(a.confW, a.confL), bp = pct(b.confW, b.confL);
+      if (bp !== ap) return bp - ap;
+      if (b.confW !== a.confW) return b.confW - a.confW;
+      const aop = pct(a.ovW, a.ovL), bop = pct(b.ovW, b.ovL);
+      if (bop !== aop) return bop - aop;
+      const ad = (a.pf - a.pa), bd = (b.pf - b.pa);
+      if (bd !== ad) return bd - ad;
+      return a.team.localeCompare(b.team);
+    });
+
+    // Anchor id so links can jump to this conference
+    const anchor = 'conf-' + conf.replace(/\s+/g,'-').replace(/[^A-Za-z0-9\-]/g,'');
+    html += `
+      <h5 id="${anchor}">${conf}</h5>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th class="text-center">Conf</th>
+              <th class="text-center">Overall</th>
+              <th class="text-end">PF</th>
+              <th class="text-end">PA</th>
+              <th class="text-end">Diff</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => {
+              const diff = r.pf - r.pa;
+              const logo = LOGOS[r.team] ? `<img class="team-logo" src="${LOGOS[r.team]}" alt="">` : '';
+              return `
+                <tr>
+                  <td>${logo}${r.team}</td>
+                  <td class="text-center">${r.confW}-${r.confL} <span class="text-muted">(${(pct(r.confW,r.confL)*100).toFixed(1)}%)</span></td>
+                  <td class="text-center">${r.ovW}-${r.ovL} <span class="text-muted">(${(pct(r.ovW,r.ovL)*100).toFixed(1)}%)</span></td>
+                  <td class="text-end">${r.pf}</td>
+                  <td class="text-end">${r.pa}</td>
+                  <td class="text-end">${diff >= 0 ? '+'+diff : diff}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html || `<div class="alert alert-info">No conference data available from current games.</div>`;
+})();
+</script>
+
 
 </body>
 </html>
