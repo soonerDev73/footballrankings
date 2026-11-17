@@ -278,11 +278,11 @@ games.forEach(game => {
       const oppNegQS = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTotal < 0);
 
       if (won) {
-        if (oppNegQS) qualityChange = 1.00;
-        else if (trueAway && bigWin) qualityChange = 1.60;
-        else if (!trueAway && bigWin) qualityChange = 1.40;
-        else if (trueAway && !bigWin) qualityChange = 1.25;
-        else qualityChange = 1.10;
+        if (oppNegQS) qualityChange = 0.90;
+        else if (trueAway && bigWin) qualityChange = 1.30;
+        else if (!trueAway && bigWin) qualityChange = 1.10;
+        else if (trueAway && !bigWin) qualityChange = 1.10;
+        else qualityChange = 1.00;
       } else {
         const closeLoss = (margin < 0) && ((-margin) < 8);
         if (oppNegQS) qualityChange = -1.30;
@@ -386,11 +386,11 @@ const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTo
 
 
                 if (won) {
-                  if (oppNegQS) qualityChange = 1.00;
-                  else if (trueAway && bigWin) qualityChange = 1.60;
-                  else if (!trueAway && bigWin) qualityChange = 1.40;
-                  else if (trueAway && !bigWin) qualityChange = 1.25;
-                  else qualityChange = 1.10;
+                  if (oppNegQS) qualityChange = 0.90;
+                  else if (trueAway && bigWin) qualityChange = 1.30;
+                  else if (!trueAway && bigWin) qualityChange = 1.10;
+                  else if (trueAway && !bigWin) qualityChange = 1.10;
+                  else qualityChange = 1.00;
                 } else {
                   const closeLoss = (margin < 0) && ((-margin) < 8);
                   if (oppNegQS) qualityChange = -1.30;
@@ -745,11 +745,11 @@ rankings.forEach(r => {
           </li>
           <li><strong>Non-Power FBS (G5):</strong>
             <ul>
-              <li>Win away by &gt;13 → 1.60</li>
-              <li>Win home by &gt;13 → 1.40</li>
-              <li>Win away by ≤13 → 1.25</li>
-              <li>Win home by ≤13 → 1.10</li>
-              <li>Win vs opponent with negative QS → 1.00</li>
+              <li>Win away by &gt;13 → 1.30</li>
+              <li>Win home by &gt;13 → 1.10</li>
+              <li>Win away by ≤13 → 1.10</li>
+              <li>Win home by ≤13 → 1.00</li>
+              <li>Win vs opponent with negative QS → 0.90</li>
               <li>Loss away by &lt;8 → -0.35</li>
               <li>Loss home by &lt;8 → -0.55</li>
               <li>Loss away by ≥8 → -0.85</li>
