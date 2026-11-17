@@ -497,8 +497,8 @@ const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTo
                 if (p <= 0.174) return 2.10; // top 24
                 if (p <= 0.29) return 2.0; // top 40
                 if (p <= 0.58) return 1.5; // top 80
-                if (p <= 0.797) return 1.00; // bottom 58
-                return 0.5; // bottom 28
+                if (p <= 0.797) return 1.10; // bottom 58
+                return 0.75; // bottom 28
               }
               function __lossBase(p){
                 if (p <= 0.058) return -0.00; // top 8
