@@ -493,24 +493,24 @@ const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTo
               var __pRank = (typeof __percentileRankDesc_forTiers === 'function') ? __percentileRankDesc_forTiers(__oppQS) : 1;
 
               function __winBase(p){
-                if (p <= 0.10) return 2.35;
+                if (p <= 0.10) return 2.40;
                 if (p <= 0.20) return 2.10
                 if (p <= 0.35) return 2.0;
                 if (p <= 0.55) return 1.5;
-                if (p <= 0.85) return 1.15;
-                return 0.90; // bottom 10%
+                if (p <= 0.75) return 1.00;
+                return 0.75; // bottom 10%
               }
               function __lossBase(p){
-                if (p <= 0.10) return -0.5;
-                if (p <= 0.20) return -0.75;
-                if (p <= 0.35) return -0.85;
+                if (p <= 0.10) return -0.00;
+                if (p <= 0.20) return -0.3;
+                if (p <= 0.35) return -0.65;
                 if (p <= 0.55) return -1.05;
-                if (p <= 0.85) return -1.3;
-                return -1.6; // bottom 10%
+                if (p <= 0.75) return -1.45;
+                return -1.65; // bottom 10%
               }
 
               if (__oppClass === 'fcs') {
-                wlqScore = won ? 0.5 : -2.25;
+                wlqScore = won ? 0.15 : -2.75;
               } else { // fbs
                 var __base = won ? __winBase(__pRank) : __lossBase(__pRank);
                 var __isBottom10 = (__pRank > 0.90);
@@ -757,7 +757,7 @@ rankings.forEach(r => {
               <li>Loss vs opponent with negative QS → -1.30</li>
             </ul>
           </li>
-          <li><strong>FCS Opponents:</strong> Win = 0.25; Loss = -2.25</li>
+          <li><strong>FCS Opponents:</strong> Win = 0.15; Loss = -2.75</li>
         </ul>
       </dd>
 
@@ -765,13 +765,13 @@ rankings.forEach(r => {
       <dd class="col-sm-9">
         Per-game scores tiered by opponent <em>QS percentile</em> (descending; 0 = best QS):
         <ul>
-          <li>FCS win = 0.50; FCS loss = -2.25</li>
-          <li>Top 10% opponent: Win = 2.35, Loss = -0.5</li>
-          <li>10.1–20%: Win = 2.10, Loss = -0.75</li>
-          <li>20.1–35%: Win = 2.0, Loss = -0.85</li>
+          <li>FCS win = 0.15; FCS loss = -2.75</li>
+          <li>Top 10% opponent: Win = 2.40, Loss = -0.00</li>
+          <li>10.1–20%: Win = 2.10, Loss = -0.30</li>
+          <li>20.1–35%: Win = 2.0, Loss = -0.65</li>
           <li>35.1–55%: Win = 1.5, Loss = -1.05</li>
-          <li>55.1–75%: Win = 1.15, Loss = -1.3</li>
-          <li>Bottom 15%: Win = 0.90, Loss = -1.6</li>
+          <li>55.1–75%: Win = 1.00, Loss = -1.45</li>
+          <li>Bottom 25%: Win = 0.75, Loss = -1.65</li>
         </ul>
         <strong>Bonuses (not applied to bottom-10% tier):</strong>
         <ul>
