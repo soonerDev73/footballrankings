@@ -278,11 +278,11 @@ games.forEach(game => {
       const oppNegQS = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTotal < 0);
 
       if (won) {
-        if (oppNegQS) qualityChange = 0.90;
-        else if (trueAway && bigWin) qualityChange = 1.30;
-        else if (!trueAway && bigWin) qualityChange = 1.10;
-        else if (trueAway && !bigWin) qualityChange = 1.10;
-        else qualityChange = 1.00;
+        if (oppNegQS) qualityChange = 0.00;
+        else if (trueAway && bigWin) qualityChange = 0;
+        else if (!trueAway && bigWin) qualityChange = 0;
+        else if (trueAway && !bigWin) qualityChange = 0;
+        else qualityChange = 0;
       } else {
         const closeLoss = (margin < 0) && ((-margin) < 8);
         if (oppNegQS) qualityChange = -1.30;
@@ -386,11 +386,11 @@ const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTo
 
 
                 if (won) {
-                  if (oppNegQS) qualityChange = 0.90;
-                  else if (trueAway && bigWin) qualityChange = 1.30;
-                  else if (!trueAway && bigWin) qualityChange = 1.10;
-                  else if (trueAway && !bigWin) qualityChange = 1.10;
-                  else qualityChange = 1.00;
+                  if (oppNegQS) qualityChange = 0.00;
+                  else if (trueAway && bigWin) qualityChange = 0;
+                  else if (!trueAway && bigWin) qualityChange = 0;
+                  else if (trueAway && !bigWin) qualityChange = 0;
+                  else qualityChange = 0;
                 } else {
                   const closeLoss = (margin < 0) && ((-margin) < 8);
                   if (oppNegQS) qualityChange = -1.30;
