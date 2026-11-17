@@ -256,8 +256,8 @@ games.forEach(game => {
 
       if (won) {
         if (oppNegQS) qualityChange = 1.20;
-        else if (trueAway && bigWin) qualityChange = 2.05;
-        else if (!trueAway && bigWin) qualityChange = 1.85;
+        else if (trueAway && bigWin) qualityChange = 2.00;
+        else if (!trueAway && bigWin) qualityChange = 1.70;
         else if (trueAway && !bigWin) qualityChange = 1.70;
         else qualityChange = 1.50;
       } else {
@@ -278,11 +278,11 @@ games.forEach(game => {
       const oppNegQS = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTotal < 0);
 
       if (won) {
-        if (oppNegQS) qualityChange = 0.00;
-        else if (trueAway && bigWin) qualityChange = 0;
-        else if (!trueAway && bigWin) qualityChange = 0;
-        else if (trueAway && !bigWin) qualityChange = 0;
-        else qualityChange = 0;
+        if (oppNegQS) qualityChange = 0.90;
+        else if (trueAway && bigWin) qualityChange = 1.30;
+        else if (!trueAway && bigWin) qualityChange = 1.10;
+        else if (trueAway && !bigWin) qualityChange = 1.10;
+        else qualityChange = 1.00;
       } else {
         const closeLoss = (margin < 0) && ((-margin) < 8);
         if (oppNegQS) qualityChange = -1.30;
@@ -363,8 +363,8 @@ const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTo
 
                 if (won) {
                   if (oppNegQS) qualityChange = 1.20;
-                  else if (trueAway && bigWin) qualityChange = 2.05;
-                  else if (!trueAway && bigWin) qualityChange = 1.85;
+                  else if (trueAway && bigWin) qualityChange = 2.00;
+                  else if (!trueAway && bigWin) qualityChange = 1.70;
                   else if (trueAway && !bigWin) qualityChange = 1.70;
                   else qualityChange = 1.50;
                 } else {
@@ -386,11 +386,11 @@ const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTo
 
 
                 if (won) {
-                  if (oppNegQS) qualityChange = 0.00;
-                  else if (trueAway && bigWin) qualityChange = 0;
-                  else if (!trueAway && bigWin) qualityChange = 0;
-                  else if (trueAway && !bigWin) qualityChange = 0;
-                  else qualityChange = 0;
+                  if (oppNegQS) qualityChange = 0.90;
+                  else if (trueAway && bigWin) qualityChange = 1.30;
+                  else if (!trueAway && bigWin) qualityChange = 1.10;
+                  else if (trueAway && !bigWin) qualityChange = 1.10;
+                  else qualityChange = 1.00;
                 } else {
                   const closeLoss = (margin < 0) && ((-margin) < 8);
                   if (oppNegQS) qualityChange = -1.30;
@@ -494,18 +494,18 @@ const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTo
 
               function __winBase(p){
                 if (p <= 0.10) return 2.35;
-                //if (p <= 0.20) return 2.0
+                if (p <= 0.20) return 2.10
                 if (p <= 0.35) return 2.0;
-                if (p <= 0.55) return 1.55;
-                if (p <= 0.75) return 1.15;
-                return 1.00; // bottom 10%
+                if (p <= 0.55) return 1.5;
+                if (p <= 0.85) return 1.15;
+                return 0.90; // bottom 10%
               }
               function __lossBase(p){
-                if (p <= 0.10) return -0.7;
-                //if (p <= 0.20) return 0.7;
+                if (p <= 0.10) return -0.5;
+                if (p <= 0.20) return -0.75;
                 if (p <= 0.35) return -0.85;
                 if (p <= 0.55) return -1.05;
-                if (p <= 0.75) return -1.3;
+                if (p <= 0.85) return -1.3;
                 return -1.6; // bottom 10%
               }
 
@@ -731,8 +731,8 @@ rankings.forEach(r => {
         <ul>
           <li><strong>Power FBS (P5):</strong>
             <ul>
-              <li>Win away by &gt;13 → 2.05</li>
-              <li>Win home by &gt;13 → 1.85</li>
+              <li>Win away by &gt;13 → 2.00</li>
+              <li>Win home by &gt;13 → 1.70</li>
               <li>Win away by ≤13 → 1.70</li>
               <li>Win home by ≤13 → 1.50</li>
               <li>Win vs opponent with negative QS → 1.20</li>
@@ -765,12 +765,13 @@ rankings.forEach(r => {
       <dd class="col-sm-9">
         Per-game scores tiered by opponent <em>QS percentile</em> (descending; 0 = best QS):
         <ul>
-          <li>FCS win = 0.25; FCS loss = -2.25</li>
-          <li>Top 10% opponent: Win = 2.35, Loss = -0.7</li>
-          <li>10.1–35%: Win = 2.0, Loss = -0.85</li>
-          <li>35.1–55%: Win = 1.55, Loss = -1.05</li>
+          <li>FCS win = 0.50; FCS loss = -2.25</li>
+          <li>Top 10% opponent: Win = 2.35, Loss = -0.5</li>
+          <li>10.1–20%: Win = 2.10, Loss = -0.75</li>
+          <li>20.1–35%: Win = 2.0, Loss = -0.85</li>
+          <li>35.1–55%: Win = 1.5, Loss = -1.05</li>
           <li>55.1–75%: Win = 1.15, Loss = -1.3</li>
-          <li>Bottom 25%: Win = 1.0, Loss = -1.6</li>
+          <li>Bottom 15%: Win = 0.90, Loss = -1.6</li>
         </ul>
         <strong>Bonuses (not applied to bottom-10% tier):</strong>
         <ul>
