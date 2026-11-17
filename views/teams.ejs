@@ -495,18 +495,18 @@ const oppNegQS   = !!(teamStatsSeed[oppName] && teamStatsSeed[oppName].qualityTo
              function __winBase(p){
                 if (p <= 0.058) return 2.40; // top 8
                 if (p <= 0.174) return 2.10; // top 24
-                if (p <= 0.29) return 2.0; // top 40
-                if (p <= 0.58) return 1.5; // top 80
+                if (p <= 0.29) return 1.85; // top 40
+                if (p <= 0.58) return 1.4; // top 80
                 if (p <= 0.797) return 1.10; // bottom 58
-                return 0.75; // bottom 28
+                return 0.70; // bottom 28
               }
               function __lossBase(p){
                 if (p <= 0.058) return -0.00; // top 8
                 if (p <= 0.174) return -0.25; // top 24
                 if (p <= 0.362) return -0.60; // top 50
-                if (p <= 0.652) return -1.00; // top 90
+                if (p <= 0.652) return -1.10; // top 90
                 // if (p <= 0.75) return -1.45;
-                return -1.5; // bottom 48
+                return -1.6; // bottom 48
               }
 
               if (__oppClass === 'fcs') {
